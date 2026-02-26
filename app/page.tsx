@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Footer from './components/Footer'
 import Header from './components/Header'
-
+//fix
 export default function Home() {
 	const [role, setRole] = useState<'student' | 'teacher' | 'lookup' | null>(
 		null,
