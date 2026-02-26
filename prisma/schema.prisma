@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Schedule {
+  id        Int      @id @default(autoincrement())
+  course    Int
+  group     String
+  groupFull String
+  specialty String
+  dayOfWeek String
+  timeSlot  String
+  subject   String
+  teacher   String
+  room      String?
+  weekType  String   @default("both")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([course, groupFull, dayOfWeek, timeSlot])
+  @@index([course, group])
+  @@index([teacher])
+  @@index([groupFull])
+}
+
+model Teacher {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
