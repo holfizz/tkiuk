@@ -182,9 +182,39 @@ function StudentScheduleContent() {
 										>
 											<h3 className='day-title'>{day}</h3>
 											<div className='lessons-list'>
-												{daySchedule.map(({ pairNumber, item }) => {
+												{daySchedule.map(({ pairNumber, item }, index) => {
+													// Проверяем, есть ли пары после текущей
+													const hasClassesAfter = daySchedule
+														.slice(index + 1)
+														.some(s => s.item !== undefined)
+
+													// Если пары нет, но есть пары после - показываем плашку
+													if (!item && hasClassesAfter) {
+														return (
+															<div
+																key={pairNumber}
+																className='lesson-card lunch-card'
+															>
+																<div className='lesson-number'>🎉</div>
+																<div className='lesson-content'>
+																	<div
+																		className='lesson-subject'
+																		style={{ color: '#f59e0b' }}
+																	>
+																		Вам не нужно на эту пару
+																	</div>
+																	<div className='lesson-room'>
+																		{pairNumber} пара: окно
+																	</div>
+																</div>
+															</div>
+														)
+													}
+
+													// Если пары нет и после тоже нет - не показываем ничего
 													if (!item) return null
 
+													// Показываем обычную пару
 													return (
 														<div key={pairNumber} className='lesson-card'>
 															<div className='lesson-number'>{pairNumber}</div>

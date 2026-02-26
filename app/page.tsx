@@ -18,6 +18,24 @@ export default function Home() {
 	const router = useRouter()
 
 	useEffect(() => {
+		// Проверяем URL параметры
+		const urlParams = new URLSearchParams(window.location.search)
+		const lookupParam = urlParams.get('lookup')
+
+		// Если есть параметр lookup, показываем форму поиска преподавателя и НЕ редиректим
+		if (lookupParam === 'true') {
+			setRole('lookup')
+			// Загружаем преподавателей
+			fetch('/api/teachers')
+				.then(res => res.json())
+				.then(data => {
+					setAvailableTeachers(data.teachers)
+					setFilteredTeachers(data.teachers)
+				})
+			return // Важно: выходим из useEffect, не проверяем localStorage
+		}
+
+		// Проверяем localStorage только если нет параметра lookup
 		const savedRole = localStorage.getItem('userRole')
 		const savedCourse = localStorage.getItem('userCourse')
 		const savedGroup = localStorage.getItem('userGroup')
@@ -31,7 +49,6 @@ export default function Home() {
 				`/schedule/teacher?teacher=${encodeURIComponent(savedTeacher)}`,
 			)
 		}
-		// Для lookup не редиректим, показываем форму поиска
 	}, [router])
 
 	const handleRoleSelect = async (
@@ -64,9 +81,11 @@ export default function Home() {
 		if (search.trim() === '') {
 			setFilteredTeachers(availableTeachers)
 		} else {
-			const filtered = availableTeachers.filter(t =>
-				t.toLowerCase().includes(search.toLowerCase()),
-			)
+			const searchLower = search.toLowerCase().trim()
+			const filtered = availableTeachers.filter(t => {
+				const teacherLower = t.toLowerCase()
+				return teacherLower.includes(searchLower)
+			})
 			setFilteredTeachers(filtered)
 		}
 	}
@@ -78,6 +97,10 @@ export default function Home() {
 			localStorage.setItem('userGroup', selectedGroup)
 			router.push(`/schedule/student?course=${course}&group=${selectedGroup}`)
 		} else if ((role === 'teacher' || role === 'lookup') && teacherSearch) {
+			// Проверяем, что преподаватель действительно существует в базе
+			if (!availableTeachers.includes(teacherSearch)) {
+				return // Не даем перейти, если преподавателя нет в списке
+			}
 			if (role === 'teacher') {
 				localStorage.setItem('userRole', 'teacher')
 				localStorage.setItem('userTeacher', teacherSearch)
@@ -269,41 +292,41 @@ export default function Home() {
 									/>
 								</div>
 
-								{teacherSearch &&
-									filteredTeachers.length > 0 &&
-									filteredTeachers.length > 1 && (
-										<div className='step-card active'>
-											<div className='step-number'>02</div>
-											<h3>Выберите из списка</h3>
-											<div className='teacher-grid'>
-												{filteredTeachers.slice(0, 10).map(t => (
-													<button
-														key={t}
-														className='teacher-card'
-														onClick={() => {
-															setTeacherSearch(t)
-															setFilteredTeachers([t])
-														}}
-													>
-														{t}
-													</button>
-												))}
-											</div>
-										</div>
-									)}
-
-								{teacherSearch && filteredTeachers.length === 1 && (
+								{teacherSearch && filteredTeachers.length > 0 && (
 									<div className='step-card active'>
-										<div className='step-number'>03</div>
-										<h3>Подтвердите выбор</h3>
-										<div className='selected-group'>
-											Преподаватель: <strong>{teacherSearch}</strong>
+										<div className='step-number'>02</div>
+										<h3>Выберите из списка</h3>
+										<div className='teacher-grid'>
+											{filteredTeachers.slice(0, 10).map(t => (
+												<button
+													key={t}
+													className='teacher-card'
+													onClick={() => {
+														setTeacherSearch(t)
+														setFilteredTeachers([t])
+													}}
+												>
+													{t}
+												</button>
+											))}
 										</div>
-										<button className='submit-btn' onClick={handleSubmit}>
-											Показать расписание
-										</button>
 									</div>
 								)}
+
+								{teacherSearch &&
+									filteredTeachers.length === 1 &&
+									teacherSearch === filteredTeachers[0] && (
+										<div className='step-card active'>
+											<div className='step-number'>03</div>
+											<h3>Подтвердите выбор</h3>
+											<div className='selected-group'>
+												Преподаватель: <strong>{teacherSearch}</strong>
+											</div>
+											<button className='submit-btn' onClick={handleSubmit}>
+												Показать расписание
+											</button>
+										</div>
+									)}
 
 								{teacherSearch && filteredTeachers.length === 0 && (
 									<div className='step-card'>

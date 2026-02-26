@@ -969,6 +969,16 @@ tbody tr:hover {
 	transform: translateX(4px);
 }
 
+.lesson-card.lunch-card {
+	background: #fef3c7;
+	border: 2px solid #fbbf24;
+}
+
+.lesson-card.lunch-card:hover {
+	background: #fde68a;
+	transform: translateX(4px);
+}
+
 .lesson-number {
 	font-size: 1.2rem;
 	font-weight: 700;
