@@ -34,3 +34,24 @@ model Teacher {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model Replacement {
+  id              Int      @id @default(autoincrement())
+  date            String // Дата замены в формате "YYYY-MM-DD"
+  course          Int
+  groupFull       String
+  pairNumber      Int // Номер пары (1-4)
+  originalSubject String?
+  newSubject      String
+  originalTeacher String?
+  newTeacher      String
+  room            String?
+  notes           String? // Дополнительные заметки
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([date, groupFull, pairNumber])
+  @@index([date])
+  @@index([groupFull])
+  @@index([course])
+}

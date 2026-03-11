@@ -19,17 +19,30 @@ interface ScheduleItem {
 	weekType: string
 }
 
+interface Replacement {
+	id: number
+	date: string
+	course: number
+	groupFull: string
+	pairNumber: number
+	newSubject: string
+	newTeacher: string
+	room?: string
+}
+
 function TeacherScheduleContent() {
 	const router = useRouter()
 	const searchParams = useSearchParams()
 	const teacher = searchParams.get('teacher')
 
 	const [schedule, setSchedule] = useState<ScheduleItem[]>([])
+	const [replacements, setReplacements] = useState<Replacement[]>([])
 	const [loading, setLoading] = useState(true)
 
 	useEffect(() => {
 		if (teacher) {
 			loadSchedule()
+			loadReplacements()
 		}
 	}, [teacher])
 
@@ -41,6 +54,35 @@ function TeacherScheduleContent() {
 		const data = await res.json()
 		setSchedule(data.schedule || [])
 		setLoading(false)
+	}
+
+	const loadReplacements = async () => {
+		// Загружаем замены где этот преподаватель назначен
+		const res = await fetch(`/api/replacements`)
+		const data = await res.json()
+		// Фильтруем только замены для этого преподавателя
+		const filtered = (data.replacements || []).filter(
+			(r: Replacement) => r.newTeacher === teacher,
+		)
+		setReplacements(filtered)
+	}
+
+	const getTodayDate = () => {
+		const today = new Date()
+		const year = today.getFullYear()
+		const month = String(today.getMonth() + 1).padStart(2, '0')
+		const day = String(today.getDate()).padStart(2, '0')
+		return `${year}-${month}-${day}`
+	}
+
+	const getReplacement = (groupFull: string, pairNumber: number) => {
+		const todayDate = getTodayDate()
+		return replacements.find(
+			r =>
+				r.date === todayDate &&
+				r.groupFull === groupFull &&
+				r.pairNumber === pairNumber,
+		)
 	}
 
 	const groupedByDay = () => {
@@ -170,27 +212,79 @@ function TeacherScheduleContent() {
 												{daySchedule.map(({ pairNumber, items }) => {
 													if (items.length === 0) return null
 
-													return items.map((item, idx) => (
-														<div
-															key={`${pairNumber}-${idx}`}
-															className='lesson-card'
-														>
-															<div className='lesson-number'>{pairNumber}</div>
-															<div className='lesson-content'>
-																<div className='lesson-subject'>
-																	{item.subject} {getWeekBadge(item.weekType)}
+													const isToday = day === getTodayDayName()
+
+													return items.map((item, idx) => {
+														// Проверяем есть ли замена на сегодня
+														const replacement = isToday
+															? getReplacement(item.groupFull, pairNumber)
+															: null
+
+														return (
+															<div
+																key={`${pairNumber}-${idx}`}
+																className={`lesson-card ${replacement ? 'replacement-card' : ''}`}
+															>
+																<div className='lesson-number'>
+																	{pairNumber}
 																</div>
-																<div className='lesson-teacher'>
-																	{item.groupFull}
+																<div className='lesson-content'>
+																	{replacement ? (
+																		<>
+																			<div className='replacement-badge'>
+																				<svg
+																					xmlns='http://www.w3.org/2000/svg'
+																					width='14'
+																					height='14'
+																					viewBox='0 0 24 24'
+																					style={{ flexShrink: 0 }}
+																				>
+																					<path
+																						fill='currentColor'
+																						d='M14.293 2.293a1 1 0 0 1 1.414 0l4 4a1 1 0 0 1 0 1.414l-4 4a1 1 0 0 1-1.414-1.414L16.586 8H5a1 1 0 0 1 0-2h11.586l-2.293-2.293a1 1 0 0 1 0-1.414m-4.586 10a1 1 0 0 1 0 1.414L7.414 16H19a1 1 0 1 1 0 2H7.414l2.293 2.293a1 1 0 0 1-1.414 1.414l-4-4a1 1 0 0 1 0-1.414l4-4a1 1 0 0 1 1.414 0'
+																					></path>
+																				</svg>
+																				ЗАМЕНА
+																			</div>
+																			<div className='lesson-subject'>
+																				{replacement.newSubject}
+																			</div>
+																			<div className='lesson-teacher'>
+																				{replacement.groupFull}
+																			</div>
+																			{replacement.room && (
+																				<div className='lesson-room'>
+																					{replacement.room ===
+																						'Дистанционно' ||
+																					replacement.room === 'Дист'
+																						? '🏠 Дистанционно'
+																						: `Каб. ${replacement.room}`}
+																				</div>
+																			)}
+																		</>
+																	) : (
+																		<>
+																			<div className='lesson-subject'>
+																				{item.subject}{' '}
+																				{getWeekBadge(item.weekType)}
+																			</div>
+																			<div className='lesson-teacher'>
+																				{item.groupFull}
+																			</div>
+																			{item.room && (
+																				<div className='lesson-room'>
+																					{item.room === 'Дистанционно' ||
+																					item.room === 'Дист'
+																						? '🏠 Дистанционно'
+																						: `Каб. ${item.room}`}
+																				</div>
+																			)}
+																		</>
+																	)}
 																</div>
-																{item.room && (
-																	<div className='lesson-room'>
-																		Каб. {item.room}
-																	</div>
-																)}
 															</div>
-														</div>
-													))
+														)
+													})
 												})}
 											</div>
 										</div>
@@ -228,7 +322,7 @@ function TeacherScheduleContent() {
 									className='btn-action-secondary'
 									style={{ textDecoration: 'none', textAlign: 'center' }}
 								>
-									📄 Заказать справку
+									Заказать справку
 								</a>
 							</div>
 						</div>

@@ -979,6 +979,30 @@ tbody tr:hover {
 	transform: translateX(4px);
 }
 
+.lesson-card.replacement-card {
+	background: #fef2f2;
+	border: 2px solid #fca5a5;
+}
+
+.lesson-card.replacement-card:hover {
+	background: #fee2e2;
+	transform: translateX(4px);
+}
+
+.replacement-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	background: #fca5a5;
+	color: #7f1d1d;
+	border-radius: 12px;
+	font-size: 0.75rem;
+	font-weight: 700;
+	margin-bottom: 6px;
+	letter-spacing: 0.5px;
+}
+
 .lesson-number {
 	font-size: 1.2rem;
 	font-weight: 700;

@@ -22,9 +22,9 @@ interface ScheduleItem {
 export default function AdminUpload() {
 	const [uploading, setUploading] = useState(false)
 	const [message, setMessage] = useState('')
-	const [activeTab, setActiveTab] = useState<'upload' | 'view' | 'teachers'>(
-		'view',
-	)
+	const [activeTab, setActiveTab] = useState<
+		'upload' | 'view' | 'teachers' | 'replacements'
+	>('view')
 	const [schedule, setSchedule] = useState<ScheduleItem[]>([])
 	const [loading, setLoading] = useState(false)
 	const [filterCourse, setFilterCourse] = useState<string>('1')
@@ -32,6 +32,10 @@ export default function AdminUpload() {
 	const [editedSchedule, setEditedSchedule] = useState<ScheduleItem[]>([])
 	const [isAuthenticated, setIsAuthenticated] = useState(false)
 	const [teachers, setTeachers] = useState<string[]>([])
+	const [replacements, setReplacements] = useState<any[]>([])
+	const [replacementMessage, setReplacementMessage] = useState('')
+	const [isEditingReplacements, setIsEditingReplacements] = useState(false)
+	const [editedReplacements, setEditedReplacements] = useState<any[]>([])
 	const router = useRouter()
 
 	useEffect(() => {
@@ -48,6 +52,8 @@ export default function AdminUpload() {
 			loadSchedule()
 		} else if (activeTab === 'teachers' && isAuthenticated) {
 			loadTeachers()
+		} else if (activeTab === 'replacements' && isAuthenticated) {
+			loadReplacements()
 		}
 	}, [activeTab, filterCourse, isAuthenticated])
 
@@ -68,6 +74,115 @@ export default function AdminUpload() {
 		const data = await res.json()
 		setTeachers(data.teachers || [])
 		setLoading(false)
+	}
+
+	const loadReplacements = async () => {
+		setLoading(true)
+		const res = await fetch('/api/replacements')
+		const data = await res.json()
+		setReplacements(data.replacements || [])
+		setEditedReplacements(data.replacements || [])
+		setLoading(false)
+	}
+
+	const handleEditReplacements = () => {
+		setIsEditingReplacements(true)
+		setEditedReplacements([...replacements])
+	}
+
+	const handleCancelEditReplacements = () => {
+		setIsEditingReplacements(false)
+		setEditedReplacements([...replacements])
+	}
+
+	const handleSaveReplacements = async () => {
+		try {
+			// Обновляем все измененные замены
+			for (const replacement of editedReplacements) {
+				await fetch('/api/replacements/update', {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						id: replacement.id,
+						newSubject: replacement.newSubject,
+						newTeacher: replacement.newTeacher,
+						room: replacement.room,
+					}),
+				})
+			}
+			setReplacementMessage('Все замены сохранены')
+			setIsEditingReplacements(false)
+			loadReplacements()
+		} catch (error) {
+			setReplacementMessage(`❌ Ошибка: ${error}`)
+		} finally {
+			setTimeout(() => setReplacementMessage(''), 3000)
+		}
+	}
+
+	const handleReplacementChange = (
+		id: number,
+		field: string,
+		value: string,
+	) => {
+		setEditedReplacements(prev =>
+			prev.map(r => (r.id === id ? { ...r, [field]: value } : r)),
+		)
+	}
+
+	const handleReplacementUpload = async (
+		e: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const file = e.target.files?.[0]
+		if (!file) return
+
+		setUploading(true)
+		setReplacementMessage('Загрузка файла замен...')
+
+		const formData = new FormData()
+		formData.append('file', file)
+
+		try {
+			const res = await fetch('/api/replacements/upload', {
+				method: 'POST',
+				body: formData,
+			})
+
+			const data = await res.json()
+
+			if (res.ok) {
+				setReplacementMessage(data.message || 'Замены успешно загружены')
+				loadReplacements()
+			} else {
+				setReplacementMessage(`Ошибка: ${data.error}`)
+			}
+		} catch (error) {
+			setReplacementMessage(`Ошибка при загрузке: ${error}`)
+		} finally {
+			setUploading(false)
+			setTimeout(() => setReplacementMessage(''), 5000)
+		}
+	}
+
+	const handleDeleteReplacements = async (date: string) => {
+		if (!confirm(`Удалить все замены на ${date}?`)) return
+
+		try {
+			const res = await fetch(`/api/replacements?date=${date}`, {
+				method: 'DELETE',
+			})
+
+			if (res.ok) {
+				setReplacementMessage('Замены удалены')
+				loadReplacements()
+			} else {
+				setReplacementMessage('Ошибка при удалении')
+			}
+		} catch (error) {
+			setReplacementMessage(`Ошибка: ${error}`)
+		} finally {
+			setTimeout(() => setReplacementMessage(''), 3000)
+		}
 	}
 
 	const handleLogout = () => {
@@ -286,6 +401,12 @@ export default function AdminUpload() {
 							Загрузка файлов
 						</button>
 						<button
+							className={`admin-tab ${activeTab === 'replacements' ? 'active' : ''}`}
+							onClick={() => setActiveTab('replacements')}
+						>
+							Замены
+						</button>
+						<button
 							className={`admin-tab ${activeTab === 'teachers' ? 'active' : ''}`}
 							onClick={() => setActiveTab('teachers')}
 						>
@@ -371,7 +492,7 @@ export default function AdminUpload() {
 								<div style={{ display: 'flex', gap: '10px' }}>
 									{!isEditing ? (
 										<button className='btn-edit' onClick={startEdit}>
-											✏️ Редактировать
+											Редактировать
 										</button>
 									) : (
 										<>
@@ -519,6 +640,237 @@ export default function AdminUpload() {
 									style={{ marginTop: '20px' }}
 								>
 									{message}
+								</div>
+							)}
+						</div>
+					)}
+
+					{activeTab === 'replacements' && (
+						<div className='selection-container'>
+							<h2 className='section-title' style={{ fontSize: '1.5rem' }}>
+								Замены
+							</h2>
+							<p
+								style={{
+									textAlign: 'center',
+									color: '#6b7280',
+									marginBottom: '24px',
+								}}
+							>
+								Загрузите DOCX файл с заменами
+							</p>
+
+							<div style={{ marginBottom: '24px' }}>
+								<label
+									htmlFor='replacement-upload'
+									className='file-upload-btn'
+									style={{
+										display: 'inline-block',
+										cursor: uploading ? 'not-allowed' : 'pointer',
+										opacity: uploading ? 0.6 : 1,
+									}}
+								>
+									{uploading ? 'Загрузка...' : 'Выбрать файл замен (DOCX)'}
+								</label>
+								<input
+									id='replacement-upload'
+									type='file'
+									accept='.docx'
+									onChange={handleReplacementUpload}
+									disabled={uploading}
+									style={{ display: 'none' }}
+								/>
+							</div>
+
+							{replacementMessage && (
+								<div
+									className={
+										replacementMessage.includes('успешно') ||
+										replacementMessage.includes('удалены')
+											? 'success-message'
+											: 'message error'
+									}
+								>
+									{replacementMessage}
+								</div>
+							)}
+
+							{loading ? (
+								<div className='loading'>Загрузка...</div>
+							) : replacements.length === 0 ? (
+								<p
+									style={{
+										textAlign: 'center',
+										color: '#6b7280',
+										padding: '20px',
+									}}
+								>
+									Замены не найдены. Загрузите файл с заменами.
+								</p>
+							) : (
+								<div>
+									<div
+										style={{
+											display: 'flex',
+											justifyContent: 'space-between',
+											alignItems: 'center',
+											marginBottom: '16px',
+										}}
+									>
+										<h3
+											style={{
+												fontSize: '1.2rem',
+												color: '#374151',
+											}}
+										>
+											Загруженные замены
+										</h3>
+										{!isEditingReplacements ? (
+											<button
+												className='btn-edit'
+												onClick={handleEditReplacements}
+											>
+												Редактировать
+											</button>
+										) : (
+											<div style={{ display: 'flex', gap: '8px' }}>
+												<button
+													className='btn-save'
+													onClick={handleSaveReplacements}
+												>
+													Сохранить
+												</button>
+												<button
+													className='btn-cancel'
+													onClick={handleCancelEditReplacements}
+												>
+													Отмена
+												</button>
+											</div>
+										)}
+									</div>
+									{Object.entries(
+										(isEditingReplacements
+											? editedReplacements
+											: replacements
+										).reduce((acc: any, r: any) => {
+											if (!acc[r.date]) acc[r.date] = []
+											acc[r.date].push(r)
+											return acc
+										}, {}),
+									).map(([date, items]: [string, any]) => (
+										<div
+											key={date}
+											style={{
+												marginBottom: '24px',
+												background: 'white',
+												borderRadius: '20px',
+												overflow: 'hidden',
+												boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+											}}
+										>
+											<div
+												style={{
+													display: 'flex',
+													justifyContent: 'space-between',
+													alignItems: 'center',
+													padding: '16px 20px',
+													background: '#f9fafb',
+													borderBottom: '1px solid #e5e7eb',
+												}}
+											>
+												<h4 style={{ fontSize: '1.1rem', color: '#1a1a1a' }}>
+													{new Date(date).toLocaleDateString('ru-RU', {
+														day: 'numeric',
+														month: 'long',
+														year: 'numeric',
+													})}
+												</h4>
+												<button
+													className='btn-danger btn-small'
+													onClick={() => handleDeleteReplacements(date)}
+													disabled={isEditingReplacements}
+												>
+													Удалить все
+												</button>
+											</div>
+											<div className='admin-table-wrapper'>
+												<table className='admin-table'>
+													<thead>
+														<tr>
+															<th>Группа</th>
+															<th>Пара</th>
+															<th>Дисциплина</th>
+															<th>Преподаватель</th>
+															<th>Аудитория</th>
+														</tr>
+													</thead>
+													<tbody>
+														{items.map((r: any) => (
+															<tr key={r.id}>
+																<td>{r.groupFull}</td>
+																<td>{r.pairNumber}</td>
+																<td>
+																	{isEditingReplacements ? (
+																		<input
+																			type='text'
+																			value={r.newSubject}
+																			onChange={e =>
+																				handleReplacementChange(
+																					r.id,
+																					'newSubject',
+																					e.target.value,
+																				)
+																			}
+																			className='edit-input'
+																		/>
+																	) : (
+																		r.newSubject
+																	)}
+																</td>
+																<td>
+																	{isEditingReplacements ? (
+																		<input
+																			type='text'
+																			value={r.newTeacher}
+																			onChange={e =>
+																				handleReplacementChange(
+																					r.id,
+																					'newTeacher',
+																					e.target.value,
+																				)
+																			}
+																			className='edit-input'
+																		/>
+																	) : (
+																		r.newTeacher
+																	)}
+																</td>
+																<td>
+																	{isEditingReplacements ? (
+																		<input
+																			type='text'
+																			value={r.room || ''}
+																			onChange={e =>
+																				handleReplacementChange(
+																					r.id,
+																					'room',
+																					e.target.value,
+																				)
+																			}
+																			className='edit-input'
+																		/>
+																	) : (
+																		r.room || '-'
+																	)}
+																</td>
+															</tr>
+														))}
+													</tbody>
+												</table>
+											</div>
+										</div>
+									))}
 								</div>
 							)}
 						</div>

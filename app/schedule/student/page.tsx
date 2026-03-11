@@ -19,6 +19,17 @@ interface ScheduleItem {
 	weekType: string
 }
 
+interface Replacement {
+	id: number
+	date: string
+	course: number
+	groupFull: string
+	pairNumber: number
+	newSubject: string
+	newTeacher: string
+	room?: string
+}
+
 function StudentScheduleContent() {
 	const router = useRouter()
 	const searchParams = useSearchParams()
@@ -26,11 +37,13 @@ function StudentScheduleContent() {
 	const group = searchParams.get('group')
 
 	const [schedule, setSchedule] = useState<ScheduleItem[]>([])
+	const [replacements, setReplacements] = useState<Replacement[]>([])
 	const [loading, setLoading] = useState(true)
 
 	useEffect(() => {
 		if (course && group) {
 			loadSchedule()
+			loadReplacements()
 		}
 	}, [course, group])
 
@@ -43,6 +56,13 @@ function StudentScheduleContent() {
 		)
 		setSchedule(filtered)
 		setLoading(false)
+	}
+
+	const loadReplacements = async () => {
+		// Загружаем замены для этой группы
+		const res = await fetch(`/api/replacements?group=${group}`)
+		const data = await res.json()
+		setReplacements(data.replacements || [])
 	}
 
 	const groupedByDay = () => {
@@ -83,6 +103,21 @@ function StudentScheduleContent() {
 			'Суббота',
 		]
 		return days[new Date().getDay()]
+	}
+
+	const getTodayDate = () => {
+		const today = new Date()
+		const year = today.getFullYear()
+		const month = String(today.getMonth() + 1).padStart(2, '0')
+		const day = String(today.getDate()).padStart(2, '0')
+		return `${year}-${month}-${day}`
+	}
+
+	const getReplacement = (pairNumber: number) => {
+		const todayDate = getTodayDate()
+		return replacements.find(
+			r => r.date === todayDate && r.pairNumber === pairNumber,
+		)
 	}
 
 	const getLunchTime = (courseNum: string) => {
@@ -214,23 +249,71 @@ function StudentScheduleContent() {
 													// Если пары нет и после тоже нет - не показываем ничего
 													if (!item) return null
 
-													// Показываем обычную пару
+													// Проверяем есть ли замена на сегодня для этой пары
+													const replacement = isToday
+														? getReplacement(pairNumber)
+														: null
+
+													// Показываем пару (обычную или замену)
 													return (
-														<div key={pairNumber} className='lesson-card'>
+														<div
+															key={pairNumber}
+															className={`lesson-card ${replacement ? 'replacement-card' : ''}`}
+														>
 															<div className='lesson-number'>{pairNumber}</div>
 															<div className='lesson-content'>
-																<div className='lesson-subject'>
-																	{item.subject} {getWeekBadge(item.weekType)}
-																</div>
-																{item.teacher && (
-																	<div className='lesson-teacher'>
-																		{item.teacher}
-																	</div>
-																)}
-																{item.room && (
-																	<div className='lesson-room'>
-																		Каб. {item.room}
-																	</div>
+																{replacement ? (
+																	<>
+																		<div className='replacement-badge'>
+																			<svg
+																				xmlns='http://www.w3.org/2000/svg'
+																				width='14'
+																				height='14'
+																				viewBox='0 0 24 24'
+																				style={{ flexShrink: 0 }}
+																			>
+																				<path
+																					fill='currentColor'
+																					d='M14.293 2.293a1 1 0 0 1 1.414 0l4 4a1 1 0 0 1 0 1.414l-4 4a1 1 0 0 1-1.414-1.414L16.586 8H5a1 1 0 0 1 0-2h11.586l-2.293-2.293a1 1 0 0 1 0-1.414m-4.586 10a1 1 0 0 1 0 1.414L7.414 16H19a1 1 0 1 1 0 2H7.414l2.293 2.293a1 1 0 0 1-1.414 1.414l-4-4a1 1 0 0 1 0-1.414l4-4a1 1 0 0 1 1.414 0'
+																				></path>
+																			</svg>
+																			ЗАМЕНА
+																		</div>
+																		<div className='lesson-subject'>
+																			{replacement.newSubject}
+																		</div>
+																		<div className='lesson-teacher'>
+																			{replacement.newTeacher}
+																		</div>
+																		{replacement.room && (
+																			<div className='lesson-room'>
+																				{replacement.room === 'Дистанционно' ||
+																				replacement.room === 'Дист'
+																					? '🏠 Дистанционно'
+																					: `Каб. ${replacement.room}`}
+																			</div>
+																		)}
+																	</>
+																) : (
+																	<>
+																		<div className='lesson-subject'>
+																			{item.subject}{' '}
+																			{getWeekBadge(item.weekType)}
+																		</div>
+																		{item.teacher && (
+																			<div className='lesson-teacher'>
+																				{item.teacher}
+																			</div>
+																		)}
+																		{item.room && (
+																			<div className='lesson-room'>
+																				{item.room === 'Дистанционно' ||
+																				item.room === 'Дист'
+																					? '🏠 Дистанционно'
+																					: `Каб. ${item.room}`}
+																			</div>
+																		)}
+																	</>
 																)}
 															</div>
 														</div>
@@ -269,7 +352,7 @@ function StudentScheduleContent() {
 									className='btn-action-secondary'
 									onClick={() => router.push('/?lookup=true')}
 								>
-									📋 Узнать расписание преподавателя
+									Узнать расписание преподавателя
 								</button>
 								<a
 									href='http://www.tcmc.spb.ru/student/spravka'
@@ -278,7 +361,7 @@ function StudentScheduleContent() {
 									className='btn-action-secondary'
 									style={{ textDecoration: 'none', textAlign: 'center' }}
 								>
-									📄 Заказать справку
+									Заказать справку
 								</a>
 							</div>
 						</div>
