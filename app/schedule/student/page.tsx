@@ -600,6 +600,13 @@ function StudentScheduleContent() {
 									Узнать расписание преподавателя
 								</button>
 								<a
+									href='/replacements'
+									className='btn-action-secondary'
+									style={{ textDecoration: 'none', textAlign: 'center' }}
+								>
+									Посмотреть замены
+								</a>
+								<a
 									href='http://www.tcmc.spb.ru/student/spravka'
 									target='_blank'
 									rel='noopener noreferrer'
