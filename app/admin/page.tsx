@@ -37,7 +37,6 @@ export default function AdminUpload() {
 	const [isEditingReplacements, setIsEditingReplacements] = useState(false)
 	const [editedReplacements, setEditedReplacements] = useState<any[]>([])
 	const [currentWeekType, setCurrentWeekType] = useState<string>('numerator')
-	const [todayReplacements, setTodayReplacements] = useState<any[]>([])
 	const [viewWeekType, setViewWeekType] = useState<'numerator' | 'denominator'>(
 		'numerator',
 	)
@@ -65,22 +64,9 @@ export default function AdminUpload() {
 		}
 	}
 
-	const loadTodayReplacements = async () => {
-		try {
-			const today = new Date().toISOString().split('T')[0]
-			const res = await fetch(`/api/replacements?date=${today}`)
-			const data = await res.json()
-			// Берем только первые 2 замены
-			setTodayReplacements((data.replacements || []).slice(0, 2))
-		} catch (error) {
-			console.error('Error loading today replacements:', error)
-		}
-	}
-
 	useEffect(() => {
 		if (activeTab === 'view' && isAuthenticated) {
 			loadSchedule()
-			loadTodayReplacements()
 		} else if (activeTab === 'teachers' && isAuthenticated) {
 			loadTeachers()
 		} else if (activeTab === 'replacements' && isAuthenticated) {
@@ -590,100 +576,6 @@ export default function AdminUpload() {
 
 					{activeTab === 'view' && (
 						<div className='selection-container'>
-							{todayReplacements.length > 0 && (
-								<div
-									style={{
-										background: '#fef9e7',
-										border: '2px solid #fbbf24',
-										borderRadius: '20px',
-										padding: '16px 20px',
-										marginBottom: '20px',
-									}}
-								>
-									<h3
-										style={{
-											fontSize: '1.1rem',
-											color: '#78350f',
-											marginBottom: '12px',
-											fontWeight: 600,
-										}}
-									>
-										Замены на сегодня
-									</h3>
-									<div
-										style={{
-											display: 'flex',
-											flexDirection: 'column',
-											gap: '8px',
-										}}
-									>
-										{todayReplacements.map(r => (
-											<div
-												key={r.id}
-												style={{
-													background: 'white',
-													padding: '12px 16px',
-													borderRadius: '16px',
-													display: 'flex',
-													justifyContent: 'space-between',
-													alignItems: 'center',
-													flexWrap: 'wrap',
-													gap: '8px',
-												}}
-											>
-												<div style={{ flex: '1 1 150px' }}>
-													<div
-														style={{
-															fontSize: '0.85rem',
-															fontWeight: 600,
-															color: '#1a1a1a',
-														}}
-													>
-														{r.groupFull}
-													</div>
-													<div
-														style={{
-															fontSize: '0.75rem',
-															color: '#6b7280',
-														}}
-													>
-														Пара {r.pairNumber}
-													</div>
-												</div>
-												<div style={{ flex: '2 1 200px' }}>
-													<div
-														style={{
-															fontSize: '0.85rem',
-															fontWeight: 600,
-															color: '#1a1a1a',
-														}}
-													>
-														{r.newSubject}
-													</div>
-													<div
-														style={{
-															fontSize: '0.75rem',
-															color: '#6b7280',
-														}}
-													>
-														{r.newTeacher}
-													</div>
-												</div>
-												<div
-													style={{
-														fontSize: '0.8rem',
-														color: '#9ca3af',
-														flex: '0 0 auto',
-													}}
-												>
-													Каб. {r.room || '-'}
-												</div>
-											</div>
-										))}
-									</div>
-								</div>
-							)}
-
 							<div className='admin-legend'>
 								<div className='legend-item'>
 									<div className='legend-color empty-cell'></div>
