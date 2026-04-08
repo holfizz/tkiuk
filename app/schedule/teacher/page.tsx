@@ -38,13 +38,27 @@ function TeacherScheduleContent() {
 	const [schedule, setSchedule] = useState<ScheduleItem[]>([])
 	const [replacements, setReplacements] = useState<Replacement[]>([])
 	const [loading, setLoading] = useState(true)
+	const [currentWeekType, setCurrentWeekType] = useState<string>('numerator')
 
 	useEffect(() => {
 		if (teacher) {
 			loadSchedule()
 			loadReplacements()
+			loadWeekSettings()
 		}
 	}, [teacher])
+
+	const loadWeekSettings = async () => {
+		try {
+			const res = await fetch('/api/week-settings')
+			const data = await res.json()
+			if (data.settings) {
+				setCurrentWeekType(data.settings.currentWeekType)
+			}
+		} catch (error) {
+			console.error('Error loading week settings:', error)
+		}
+	}
 
 	const loadSchedule = async () => {
 		setLoading(true)
@@ -103,10 +117,22 @@ function TeacherScheduleContent() {
 
 		return days.map(day => {
 			const daySchedule = timeSlots.map((time, index) => {
+				// Находим все версии для этого времени
 				const items = schedule.filter(
 					s => s.dayOfWeek === day && s.timeSlot === time,
 				)
-				return { pairNumber: index + 1, time, items }
+
+				const numeratorItems = items.filter(s => s.weekType === 'numerator')
+				const denominatorItems = items.filter(s => s.weekType === 'denominator')
+				const bothItems = items.filter(s => s.weekType === 'both')
+
+				return {
+					pairNumber: index + 1,
+					time,
+					numeratorItems,
+					denominatorItems,
+					bothItems,
+				}
 			})
 			return { day, schedule: daySchedule }
 		})
@@ -198,9 +224,39 @@ function TeacherScheduleContent() {
 
 							<div className='schedule-grid'>
 								{groupedByDay().map(({ day, schedule: daySchedule }) => {
-									const hasClasses = daySchedule.some(s => s.items.length > 0)
-									if (!hasClasses) return null
 									const isToday = day === getTodayDayName()
+
+									// Проверяем есть ли замены на сегодня для этого дня
+									const todayReplacements = isToday
+										? daySchedule.filter(
+												({
+													pairNumber,
+													numeratorItems,
+													denominatorItems,
+													bothItems,
+												}) => {
+													const allItems = [
+														...numeratorItems,
+														...denominatorItems,
+														...bothItems,
+													]
+													return allItems.some(item =>
+														getReplacement(item.groupFull, pairNumber),
+													)
+												},
+											)
+										: []
+
+									// Показываем день если есть пары ИЛИ есть замены на сегодня
+									const hasClasses = daySchedule.some(
+										s =>
+											s.numeratorItems.length > 0 ||
+											s.denominatorItems.length > 0 ||
+											s.bothItems.length > 0,
+									)
+									const hasReplacements = todayReplacements.length > 0
+
+									if (!hasClasses && !hasReplacements) return null
 
 									return (
 										<div
@@ -209,83 +265,95 @@ function TeacherScheduleContent() {
 										>
 											<h3 className='day-title'>{day}</h3>
 											<div className='lessons-list'>
-												{daySchedule.map(({ pairNumber, items }) => {
-													if (items.length === 0) return null
+												{daySchedule.map(
+													({
+														pairNumber,
+														numeratorItems,
+														denominatorItems,
+														bothItems,
+													}) => {
+														const allItems = [
+															...numeratorItems,
+															...denominatorItems,
+															...bothItems,
+														]
+														if (allItems.length === 0) return null
 
-													const isToday = day === getTodayDayName()
+														const isToday = day === getTodayDayName()
 
-													return items.map((item, idx) => {
-														// Проверяем есть ли замена на сегодня
-														const replacement = isToday
-															? getReplacement(item.groupFull, pairNumber)
-															: null
+														return allItems.map((item, idx) => {
+															// Проверяем есть ли замена на сегодня
+															const replacement = isToday
+																? getReplacement(item.groupFull, pairNumber)
+																: null
 
-														return (
-															<div
-																key={`${pairNumber}-${idx}`}
-																className={`lesson-card ${replacement ? 'replacement-card' : ''}`}
-															>
-																<div className='lesson-number'>
-																	{pairNumber}
-																</div>
-																<div className='lesson-content'>
-																	{replacement ? (
-																		<>
-																			<div className='replacement-badge'>
-																				<svg
-																					xmlns='http://www.w3.org/2000/svg'
-																					width='14'
-																					height='14'
-																					viewBox='0 0 24 24'
-																					style={{ flexShrink: 0 }}
-																				>
-																					<path
-																						fill='currentColor'
-																						d='M14.293 2.293a1 1 0 0 1 1.414 0l4 4a1 1 0 0 1 0 1.414l-4 4a1 1 0 0 1-1.414-1.414L16.586 8H5a1 1 0 0 1 0-2h11.586l-2.293-2.293a1 1 0 0 1 0-1.414m-4.586 10a1 1 0 0 1 0 1.414L7.414 16H19a1 1 0 1 1 0 2H7.414l2.293 2.293a1 1 0 0 1-1.414 1.414l-4-4a1 1 0 0 1 0-1.414l4-4a1 1 0 0 1 1.414 0'
-																					></path>
-																				</svg>
-																				ЗАМЕНА
-																			</div>
-																			<div className='lesson-subject'>
-																				{replacement.newSubject}
-																			</div>
-																			<div className='lesson-teacher'>
-																				{replacement.groupFull}
-																			</div>
-																			{replacement.room && (
-																				<div className='lesson-room'>
-																					{replacement.room ===
-																						'Дистанционно' ||
-																					replacement.room === 'Дист'
-																						? '🏠 Дистанционно'
-																						: `Каб. ${replacement.room}`}
+															return (
+																<div
+																	key={`${pairNumber}-${idx}`}
+																	className={`lesson-card ${replacement ? 'replacement-card' : ''}`}
+																>
+																	<div className='lesson-number'>
+																		{pairNumber}
+																	</div>
+																	<div className='lesson-content'>
+																		{replacement ? (
+																			<>
+																				<div className='replacement-badge'>
+																					<svg
+																						xmlns='http://www.w3.org/2000/svg'
+																						width='14'
+																						height='14'
+																						viewBox='0 0 24 24'
+																						style={{ flexShrink: 0 }}
+																					>
+																						<path
+																							fill='currentColor'
+																							d='M14.293 2.293a1 1 0 0 1 1.414 0l4 4a1 1 0 0 1 0 1.414l-4 4a1 1 0 0 1-1.414-1.414L16.586 8H5a1 1 0 0 1 0-2h11.586l-2.293-2.293a1 1 0 0 1 0-1.414m-4.586 10a1 1 0 0 1 0 1.414L7.414 16H19a1 1 0 1 1 0 2H7.414l2.293 2.293a1 1 0 0 1-1.414 1.414l-4-4a1 1 0 0 1 0-1.414l4-4a1 1 0 0 1 1.414 0'
+																						></path>
+																					</svg>
+																					ЗАМЕНА
 																				</div>
-																			)}
-																		</>
-																	) : (
-																		<>
-																			<div className='lesson-subject'>
-																				{item.subject}{' '}
-																				{getWeekBadge(item.weekType)}
-																			</div>
-																			<div className='lesson-teacher'>
-																				{item.groupFull}
-																			</div>
-																			{item.room && (
-																				<div className='lesson-room'>
-																					{item.room === 'Дистанционно' ||
-																					item.room === 'Дист'
-																						? '🏠 Дистанционно'
-																						: `Каб. ${item.room}`}
+																				<div className='lesson-subject'>
+																					{replacement.newSubject}
 																				</div>
-																			)}
-																		</>
-																	)}
+																				<div className='lesson-teacher'>
+																					{replacement.groupFull}
+																				</div>
+																				{replacement.room && (
+																					<div className='lesson-room'>
+																						{replacement.room ===
+																							'Дистанционно' ||
+																						replacement.room === 'Дист'
+																							? '🏠 Дистанционно'
+																							: `Каб. ${replacement.room}`}
+																					</div>
+																				)}
+																			</>
+																		) : (
+																			<>
+																				<div className='lesson-subject'>
+																					{item.subject}{' '}
+																					{getWeekBadge(item.weekType)}
+																				</div>
+																				<div className='lesson-teacher'>
+																					{item.groupFull}
+																				</div>
+																				{item.room && (
+																					<div className='lesson-room'>
+																						{item.room === 'Дистанционно' ||
+																						item.room === 'Дист'
+																							? '🏠 Дистанционно'
+																							: `Каб. ${item.room}`}
+																					</div>
+																				)}
+																			</>
+																		)}
+																	</div>
 																</div>
-															</div>
-														)
-													})
-												})}
+															)
+														})
+													},
+												)}
 											</div>
 										</div>
 									)

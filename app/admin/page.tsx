@@ -36,6 +36,11 @@ export default function AdminUpload() {
 	const [replacementMessage, setReplacementMessage] = useState('')
 	const [isEditingReplacements, setIsEditingReplacements] = useState(false)
 	const [editedReplacements, setEditedReplacements] = useState<any[]>([])
+	const [currentWeekType, setCurrentWeekType] = useState<string>('numerator')
+	const [todayReplacements, setTodayReplacements] = useState<any[]>([])
+	const [viewWeekType, setViewWeekType] = useState<'numerator' | 'denominator'>(
+		'numerator',
+	)
 	const router = useRouter()
 
 	useEffect(() => {
@@ -44,12 +49,38 @@ export default function AdminUpload() {
 			router.push('/admin/login')
 		} else {
 			setIsAuthenticated(true)
+			loadWeekSettings()
 		}
 	}, [router])
+
+	const loadWeekSettings = async () => {
+		try {
+			const res = await fetch('/api/week-settings')
+			const data = await res.json()
+			if (data.settings) {
+				setCurrentWeekType(data.settings.currentWeekType)
+			}
+		} catch (error) {
+			console.error('Error loading week settings:', error)
+		}
+	}
+
+	const loadTodayReplacements = async () => {
+		try {
+			const today = new Date().toISOString().split('T')[0]
+			const res = await fetch(`/api/replacements?date=${today}`)
+			const data = await res.json()
+			// Берем только первые 2 замены
+			setTodayReplacements((data.replacements || []).slice(0, 2))
+		} catch (error) {
+			console.error('Error loading today replacements:', error)
+		}
+	}
 
 	useEffect(() => {
 		if (activeTab === 'view' && isAuthenticated) {
 			loadSchedule()
+			loadTodayReplacements()
 		} else if (activeTab === 'teachers' && isAuthenticated) {
 			loadTeachers()
 		} else if (activeTab === 'replacements' && isAuthenticated) {
@@ -244,7 +275,9 @@ export default function AdminUpload() {
 		try {
 			setMessage('Сохранение...')
 
+			// Разделяем на обновления и создания
 			const updates = editedSchedule.filter(edited => {
+				if (edited.id < 0) return false // Пропускаем новые записи
 				const original = schedule.find(s => s.id === edited.id)
 				return (
 					original &&
@@ -254,6 +287,16 @@ export default function AdminUpload() {
 				)
 			})
 
+			const creates = editedSchedule.filter(
+				edited =>
+					edited.id < 0 &&
+					edited.subject.trim() !== '' &&
+					edited.teacher.trim() !== '',
+			)
+
+			let totalChanges = 0
+
+			// Обновляем существующие записи
 			for (const item of updates) {
 				const res = await fetch('/api/schedule/update', {
 					method: 'PUT',
@@ -265,9 +308,28 @@ export default function AdminUpload() {
 					const error = await res.json()
 					throw new Error(error.error || 'Ошибка обновления')
 				}
+				totalChanges++
 			}
 
-			setMessage(`Обновлено ${updates.length} записей`)
+			// Создаем новые записи
+			for (const item of creates) {
+				const { id, createdAt, updatedAt, ...itemData } = item as any
+				const res = await fetch('/api/schedule/update', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(itemData),
+				})
+
+				if (!res.ok) {
+					const error = await res.json()
+					throw new Error(error.error || 'Ошибка создания')
+				}
+				totalChanges++
+			}
+
+			setMessage(
+				`Обновлено ${updates.length} записей, создано ${creates.length} записей`,
+			)
 			setIsEditing(false)
 			await loadSchedule()
 		} catch (error) {
@@ -280,6 +342,64 @@ export default function AdminUpload() {
 		setEditedSchedule(prev =>
 			prev.map(item => (item.id === id ? { ...item, [field]: value } : item)),
 		)
+	}
+
+	const createNewCell = (
+		groupFull: string,
+		day: string,
+		time: string,
+		field: keyof ScheduleItem,
+		value: string,
+		weekType: 'numerator' | 'denominator',
+	) => {
+		// Создаем временную запись с отрицательным ID
+		const tempId = -Date.now()
+		const groupMatch = groupFull.match(/^(\d)/)
+		const course = groupMatch ? parseInt(groupMatch[1]) : 1
+
+		const newItem: ScheduleItem = {
+			id: tempId,
+			course: course >= 9 ? 1 : course,
+			group: groupFull.split('-')[0],
+			groupFull: groupFull,
+			specialty: '',
+			dayOfWeek: day,
+			timeSlot: time,
+			subject: field === 'subject' ? value : '',
+			teacher: field === 'teacher' ? value : '',
+			room: field === 'room' ? value : '',
+			weekType: weekType,
+		}
+
+		setEditedSchedule(prev => [...prev, newItem])
+	}
+
+	const updateOrCreateCell = (
+		id: number | null,
+		groupFull: string,
+		day: string,
+		time: string,
+		field: keyof ScheduleItem,
+		value: string,
+		weekType: 'numerator' | 'denominator',
+	) => {
+		if (id) {
+			updateCell(id, field, value)
+		} else {
+			// Проверяем, есть ли уже временная запись для этой ячейки и типа недели
+			const existing = editedSchedule.find(
+				item =>
+					item.groupFull === groupFull &&
+					item.dayOfWeek === day &&
+					item.timeSlot === time &&
+					item.weekType === weekType,
+			)
+			if (existing) {
+				updateCell(existing.id, field, value)
+			} else {
+				createNewCell(groupFull, day, time, field, value, weekType)
+			}
+		}
 	}
 
 	const groupedSchedule = () => {
@@ -327,7 +447,8 @@ export default function AdminUpload() {
 					row.groups[groupName] = item || null
 				})
 
-				if (Object.values(row.groups).some(v => v !== null)) {
+				// В режиме редактирования показываем все строки, иначе только с данными
+				if (isEditing || Object.values(row.groups).some(v => v !== null)) {
 					grouped.push(row)
 				}
 			})
@@ -469,6 +590,119 @@ export default function AdminUpload() {
 
 					{activeTab === 'view' && (
 						<div className='selection-container'>
+							{todayReplacements.length > 0 && (
+								<div
+									style={{
+										background: '#fef9e7',
+										border: '2px solid #fbbf24',
+										borderRadius: '20px',
+										padding: '16px 20px',
+										marginBottom: '20px',
+									}}
+								>
+									<h3
+										style={{
+											fontSize: '1.1rem',
+											color: '#78350f',
+											marginBottom: '12px',
+											fontWeight: 600,
+										}}
+									>
+										Замены на сегодня
+									</h3>
+									<div
+										style={{
+											display: 'flex',
+											flexDirection: 'column',
+											gap: '8px',
+										}}
+									>
+										{todayReplacements.map(r => (
+											<div
+												key={r.id}
+												style={{
+													background: 'white',
+													padding: '12px 16px',
+													borderRadius: '16px',
+													display: 'flex',
+													justifyContent: 'space-between',
+													alignItems: 'center',
+													flexWrap: 'wrap',
+													gap: '8px',
+												}}
+											>
+												<div style={{ flex: '1 1 150px' }}>
+													<div
+														style={{
+															fontSize: '0.85rem',
+															fontWeight: 600,
+															color: '#1a1a1a',
+														}}
+													>
+														{r.groupFull}
+													</div>
+													<div
+														style={{
+															fontSize: '0.75rem',
+															color: '#6b7280',
+														}}
+													>
+														Пара {r.pairNumber}
+													</div>
+												</div>
+												<div style={{ flex: '2 1 200px' }}>
+													<div
+														style={{
+															fontSize: '0.85rem',
+															fontWeight: 600,
+															color: '#1a1a1a',
+														}}
+													>
+														{r.newSubject}
+													</div>
+													<div
+														style={{
+															fontSize: '0.75rem',
+															color: '#6b7280',
+														}}
+													>
+														{r.newTeacher}
+													</div>
+												</div>
+												<div
+													style={{
+														fontSize: '0.8rem',
+														color: '#9ca3af',
+														flex: '0 0 auto',
+													}}
+												>
+													Каб. {r.room || '-'}
+												</div>
+											</div>
+										))}
+									</div>
+								</div>
+							)}
+
+							<div className='admin-legend'>
+								<div className='legend-item'>
+									<div className='legend-color empty-cell'></div>
+									<span>Нет пары</span>
+								</div>
+								<div className='legend-item'>
+									<div className='legend-color numerator-cell'></div>
+									<span>Числитель</span>
+								</div>
+								<div className='legend-item'>
+									<div className='legend-color denominator-cell'></div>
+									<span>Знаменатель</span>
+								</div>
+								<div className='legend-item'>
+									<div className='legend-color replacement-cell'></div>
+									<span>Замена</span>
+								</div>
+							</div>
+
 							<div className='admin-controls'>
 								<div
 									style={{ display: 'flex', gap: '10px', alignItems: 'center' }}
@@ -489,7 +723,38 @@ export default function AdminUpload() {
 									</select>
 								</div>
 
-								<div style={{ display: 'flex', gap: '10px' }}>
+								<div
+									style={{
+										display: 'flex',
+										gap: '10px',
+										alignItems: 'center',
+										flexWrap: 'wrap',
+									}}
+								>
+									<div
+										style={{
+											display: 'flex',
+											gap: '6px',
+											background: 'white',
+											padding: '4px',
+											borderRadius: '20px',
+											border: '2px solid #e5e7eb',
+										}}
+									>
+										<button
+											onClick={() => setViewWeekType('numerator')}
+											className={`week-type-btn ${viewWeekType === 'numerator' ? 'active numerator' : ''}`}
+										>
+											Числитель
+										</button>
+										<button
+											onClick={() => setViewWeekType('denominator')}
+											className={`week-type-btn ${viewWeekType === 'denominator' ? 'active denominator' : ''}`}
+										>
+											Знаменатель
+										</button>
+									</div>
+
 									{!isEditing ? (
 										<button className='btn-edit' onClick={startEdit}>
 											Редактировать
@@ -547,74 +812,130 @@ export default function AdminUpload() {
 														<td style={{ width: '50px' }}></td>
 														{groups.map(group => {
 															const item = row.groups[group]
+															const cellKey = `${row.day}-${row.time}-${group}`
+
+															// Находим записи для числителя и знаменателя
+															const dataSource = isEditing
+																? editedSchedule
+																: schedule
+															const numeratorItem = dataSource.find(
+																s =>
+																	s.groupFull === group &&
+																	s.dayOfWeek === row.day &&
+																	s.timeSlot === row.time &&
+																	s.weekType === 'numerator',
+															)
+															const denominatorItem = dataSource.find(
+																s =>
+																	s.groupFull === group &&
+																	s.dayOfWeek === row.day &&
+																	s.timeSlot === row.time &&
+																	s.weekType === 'denominator',
+															)
+
+															// Выбираем какую неделю показывать
+															const displayItem =
+																viewWeekType === 'numerator'
+																	? numeratorItem
+																	: denominatorItem
+
+															// Функция проверки пустой пары
+															const isEmptyLesson = (lesson: any) => {
+																if (!lesson) return true
+																const subject = lesson.subject?.trim() || ''
+																return subject === '' || subject === '-'
+															}
+
+															// Проверяем, пустая ли ячейка
+															const isEmptyCell = isEmptyLesson(displayItem)
+
+															// Проверяем, есть ли различия между числителем и знаменателем
+															const hasDifference =
+																numeratorItem &&
+																denominatorItem &&
+																(numeratorItem.subject !==
+																	denominatorItem.subject ||
+																	numeratorItem.teacher !==
+																		denominatorItem.teacher ||
+																	numeratorItem.room !== denominatorItem.room)
+
+															// Определяем класс для ячейки
+															let cellClass = 'schedule-cell'
+															if (isEmptyCell && !isEditing) {
+																cellClass += ' empty-schedule-cell'
+															} else if (hasDifference) {
+																// Только если есть различия - выделяем цветом
+																cellClass +=
+																	viewWeekType === 'numerator'
+																		? ' numerator-cell'
+																		: ' denominator-cell'
+															}
+
 															return (
-																<td key={group} className='schedule-cell'>
-																	{item ? (
-																		isEditing ? (
-																			<div className='edit-cell'>
-																				<input
-																					className='edit-input'
-																					value={
-																						editedSchedule.find(
-																							s => s.id === item.id,
-																						)?.subject || ''
-																					}
-																					onChange={e =>
-																						updateCell(
-																							item.id,
-																							'subject',
-																							e.target.value,
-																						)
-																					}
-																					placeholder='Предмет'
-																				/>
-																				<input
-																					className='edit-input'
-																					value={
-																						editedSchedule.find(
-																							s => s.id === item.id,
-																						)?.teacher || ''
-																					}
-																					onChange={e =>
-																						updateCell(
-																							item.id,
-																							'teacher',
-																							e.target.value,
-																						)
-																					}
-																					placeholder='Преподаватель'
-																				/>
-																				<input
-																					className='edit-input'
-																					value={
-																						editedSchedule.find(
-																							s => s.id === item.id,
-																						)?.room || ''
-																					}
-																					onChange={e =>
-																						updateCell(
-																							item.id,
-																							'room',
-																							e.target.value,
-																						)
-																					}
-																					placeholder='Кабинет'
-																				/>
+																<td key={group} className={cellClass}>
+																	{isEditing ? (
+																		<div className='edit-cell'>
+																			<input
+																				className='edit-input'
+																				value={displayItem?.subject || ''}
+																				onChange={e =>
+																					updateOrCreateCell(
+																						displayItem?.id || null,
+																						group,
+																						row.day,
+																						row.time,
+																						'subject',
+																						e.target.value,
+																						viewWeekType,
+																					)
+																				}
+																				placeholder='Предмет'
+																			/>
+																			<input
+																				className='edit-input'
+																				value={displayItem?.teacher || ''}
+																				onChange={e =>
+																					updateOrCreateCell(
+																						displayItem?.id || null,
+																						group,
+																						row.day,
+																						row.time,
+																						'teacher',
+																						e.target.value,
+																						viewWeekType,
+																					)
+																				}
+																				placeholder='Преподаватель'
+																			/>
+																			<input
+																				className='edit-input'
+																				value={displayItem?.room || ''}
+																				onChange={e =>
+																					updateOrCreateCell(
+																						displayItem?.id || null,
+																						group,
+																						row.day,
+																						row.time,
+																						'room',
+																						e.target.value,
+																						viewWeekType,
+																					)
+																				}
+																				placeholder='Кабинет'
+																			/>
+																		</div>
+																	) : displayItem ? (
+																		<div className='view-cell'>
+																			<div className='cell-subject'>
+																				{displayItem.subject}
 																			</div>
-																		) : (
-																			<div className='view-cell'>
-																				<div className='cell-subject'>
-																					{item.subject}{' '}
-																					{getWeekBadge(item.weekType)}
-																				</div>
-																				<div className='cell-teacher'>
-																					{item.teacher}
-																				</div>
-																				<div className='cell-room'>
-																					Каб. {item.room || '-'}
-																				</div>
+																			<div className='cell-teacher'>
+																				{displayItem.teacher}
 																			</div>
-																		)
+																			<div className='cell-room'>
+																				Каб. {displayItem.room || '-'}
+																			</div>
+																		</div>
 																	) : (
 																		'-'
 																	)}

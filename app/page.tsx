@@ -173,7 +173,13 @@ export default function Home() {
 										className='btn-action-secondary'
 										onClick={() => handleRoleSelect('lookup')}
 									>
-										📋 Узнать расписание преподавателя
+										Узнать расписание преподавателя
+									</button>
+									<button
+										className='btn-action-secondary'
+										onClick={() => router.push('/replacements')}
+									>
+										Посмотреть замены
 									</button>
 									<a
 										href='http://www.tcmc.spb.ru/student/spravka'
@@ -182,7 +188,7 @@ export default function Home() {
 										className='btn-action-secondary'
 										style={{ textDecoration: 'none', textAlign: 'center' }}
 									>
-										📄 Заказать справку
+										Заказать справку
 									</a>
 								</div>
 							</div>

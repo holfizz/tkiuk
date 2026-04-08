@@ -22,7 +22,11 @@ export default function Header({
 	return (
 		<div className='header-wrapper'>
 			<div className='header-container'>
-				<div className='header-content'>
+				<div
+					className='header-content'
+					onClick={() => router.push('/')}
+					style={{ cursor: 'pointer', userSelect: 'none' }}
+				>
 					<h1>{title || 'Расписание АИТУ'}</h1>
 					{subtitle && <p>{subtitle}</p>}
 				</div>

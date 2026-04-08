@@ -114,9 +114,9 @@ export async function POST(request: NextRequest) {
 					course,
 					groupFull,
 					pairNumber,
-					originalSubject: null,
+					originalSubject: null as string | null,
 					newSubject: newSubject.trim(),
-					originalTeacher: null,
+					originalTeacher: null as string | null,
 					newTeacher: newTeacher.trim(),
 					room: room || null,
 					notes: null,
@@ -131,6 +131,54 @@ export async function POST(request: NextRequest) {
 				{ error: 'Не удалось распарсить замены из файла' },
 				{ status: 400 },
 			)
+		}
+
+		// Получаем текущий тип недели
+		const weekSettings = await prisma.weekSettings.findFirst()
+		const currentWeekType = weekSettings?.currentWeekType || 'numerator'
+
+		// Определяем временные слоты для пар
+		const timeSlots: Record<number, string> = {
+			1: '09:00-10:35',
+			2: '10:45-12:20',
+			3: '12:55-14:30',
+			4: '14:40-16:15',
+		}
+
+		// Определяем день недели для даты замены
+		const replacementDateObj = new Date(replacementDate)
+		const dayOfWeekNum = replacementDateObj.getDay()
+		const daysOfWeek = [
+			'Воскресенье',
+			'Понедельник',
+			'Вторник',
+			'Среда',
+			'Четверг',
+			'Пятница',
+			'Суббота',
+		]
+		const dayOfWeek = daysOfWeek[dayOfWeekNum]
+
+		// Для каждой замены находим оригинальную пару из расписания
+		for (const replacement of replacements) {
+			const timeSlot = timeSlots[replacement.pairNumber]
+			if (!timeSlot) continue
+
+			// Ищем пару в расписании для текущей недели
+			const originalLesson = await prisma.schedule.findFirst({
+				where: {
+					groupFull: replacement.groupFull,
+					dayOfWeek: dayOfWeek,
+					timeSlot: timeSlot,
+					weekType: currentWeekType,
+				},
+			})
+
+			// Если нашли оригинальную пару - сохраняем её данные
+			if (originalLesson) {
+				replacement.originalSubject = originalLesson.subject
+				replacement.originalTeacher = originalLesson.teacher
+			}
 		}
 
 		for (const replacement of replacements) {

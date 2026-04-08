@@ -22,10 +22,11 @@ model Schedule {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([course, groupFull, dayOfWeek, timeSlot])
   @@index([course, group])
   @@index([teacher])
   @@index([groupFull])
+  @@index([weekType])
+  @@index([course, groupFull, dayOfWeek, timeSlot, weekType])
 }
 
 model Teacher {
@@ -37,16 +38,16 @@ model Teacher {
 
 model Replacement {
   id              Int      @id @default(autoincrement())
-  date            String // Дата замены в формате "YYYY-MM-DD"
+  date            String
   course          Int
   groupFull       String
-  pairNumber      Int // Номер пары (1-4)
+  pairNumber      Int
   originalSubject String?
   newSubject      String
   originalTeacher String?
   newTeacher      String
   room            String?
-  notes           String? // Дополнительные заметки
+  notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -54,4 +55,11 @@ model Replacement {
   @@index([date])
   @@index([groupFull])
   @@index([course])
+}
+
+model WeekSettings {
+  id              Int      @id @default(autoincrement())
+  currentWeekType String   @default("numerator")
+  startDate       String?
+  updatedAt       DateTime @updatedAt
 }

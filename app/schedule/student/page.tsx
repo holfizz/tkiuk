@@ -39,13 +39,27 @@ function StudentScheduleContent() {
 	const [schedule, setSchedule] = useState<ScheduleItem[]>([])
 	const [replacements, setReplacements] = useState<Replacement[]>([])
 	const [loading, setLoading] = useState(true)
+	const [currentWeekType, setCurrentWeekType] = useState<string>('numerator')
 
 	useEffect(() => {
 		if (course && group) {
 			loadSchedule()
 			loadReplacements()
+			loadWeekSettings()
 		}
 	}, [course, group])
+
+	const loadWeekSettings = async () => {
+		try {
+			const res = await fetch('/api/week-settings')
+			const data = await res.json()
+			if (data.settings) {
+				setCurrentWeekType(data.settings.currentWeekType)
+			}
+		} catch (error) {
+			console.error('Error loading week settings:', error)
+		}
+	}
 
 	const loadSchedule = async () => {
 		setLoading(true)
@@ -83,10 +97,31 @@ function StudentScheduleContent() {
 
 		return days.map(day => {
 			const daySchedule = timeSlots.map((time, index) => {
-				const item = schedule.find(
-					s => s.dayOfWeek === day && s.timeSlot === time,
+				// Находим обе версии (числитель и знаменатель)
+				const numeratorItem = schedule.find(
+					s =>
+						s.dayOfWeek === day &&
+						s.timeSlot === time &&
+						s.weekType === 'numerator',
 				)
-				return { pairNumber: index + 1, time, item }
+				const denominatorItem = schedule.find(
+					s =>
+						s.dayOfWeek === day &&
+						s.timeSlot === time &&
+						s.weekType === 'denominator',
+				)
+				const bothItem = schedule.find(
+					s =>
+						s.dayOfWeek === day && s.timeSlot === time && s.weekType === 'both',
+				)
+
+				return {
+					pairNumber: index + 1,
+					time,
+					numeratorItem,
+					denominatorItem,
+					bothItem,
+				}
 			})
 			return { day, schedule: daySchedule }
 		})
@@ -206,9 +241,25 @@ function StudentScheduleContent() {
 
 							<div className='schedule-grid'>
 								{groupedByDay().map(({ day, schedule: daySchedule }) => {
-									const hasClasses = daySchedule.some(s => s.item !== undefined)
-									if (!hasClasses) return null
 									const isToday = day === getTodayDayName()
+
+									// Проверяем есть ли замены на сегодня для этого дня
+									const todayReplacements = isToday
+										? daySchedule.filter(({ pairNumber }) =>
+												getReplacement(pairNumber),
+											)
+										: []
+
+									// Показываем день если есть пары ИЛИ есть замены на сегодня
+									const hasClasses = daySchedule.some(
+										s =>
+											s.numeratorItem !== undefined ||
+											s.denominatorItem !== undefined ||
+											s.bothItem !== undefined,
+									)
+									const hasReplacements = todayReplacements.length > 0
+
+									if (!hasClasses && !hasReplacements) return null
 
 									return (
 										<div
@@ -217,53 +268,43 @@ function StudentScheduleContent() {
 										>
 											<h3 className='day-title'>{day}</h3>
 											<div className='lessons-list'>
-												{daySchedule.map(({ pairNumber, item }, index) => {
-													// Проверяем, есть ли пары после текущей
-													const hasClassesAfter = daySchedule
-														.slice(index + 1)
-														.some(s => s.item !== undefined)
+												{daySchedule.map(
+													(
+														{
+															pairNumber,
+															numeratorItem,
+															denominatorItem,
+															bothItem,
+														},
+														index,
+													) => {
+														// Проверяем есть ли замена на сегодня для этой пары
+														const replacement = isToday
+															? getReplacement(pairNumber)
+															: null
 
-													// Если пары нет, но есть пары после - показываем плашку
-													if (!item && hasClassesAfter) {
-														return (
-															<div
-																key={pairNumber}
-																className='lesson-card lunch-card'
-															>
-																<div className='lesson-number'>🎉</div>
-																<div className='lesson-content'>
-																	<div
-																		className='lesson-subject'
-																		style={{ color: '#f59e0b' }}
-																	>
-																		Вам не нужно на эту пару
+														// Проверяем, есть ли пары после текущей
+														const hasClassesAfter = daySchedule
+															.slice(index + 1)
+															.some(
+																s =>
+																	s.numeratorItem ||
+																	s.denominatorItem ||
+																	s.bothItem ||
+																	(isToday && getReplacement(s.pairNumber)),
+															)
+
+														// Если есть замена - показываем её
+														if (replacement) {
+															return (
+																<div
+																	key={pairNumber}
+																	className='lesson-card replacement-card'
+																>
+																	<div className='lesson-number'>
+																		{pairNumber}
 																	</div>
-																	<div className='lesson-room'>
-																		{pairNumber} пара: окно
-																	</div>
-																</div>
-															</div>
-														)
-													}
-
-													// Если пары нет и после тоже нет - не показываем ничего
-													if (!item) return null
-
-													// Проверяем есть ли замена на сегодня для этой пары
-													const replacement = isToday
-														? getReplacement(pairNumber)
-														: null
-
-													// Показываем пару (обычную или замену)
-													return (
-														<div
-															key={pairNumber}
-															className={`lesson-card ${replacement ? 'replacement-card' : ''}`}
-														>
-															<div className='lesson-number'>{pairNumber}</div>
-															<div className='lesson-content'>
-																{replacement ? (
-																	<>
+																	<div className='lesson-content'>
 																		<div className='replacement-badge'>
 																			<svg
 																				xmlns='http://www.w3.org/2000/svg'
@@ -293,32 +334,236 @@ function StudentScheduleContent() {
 																					: `Каб. ${replacement.room}`}
 																			</div>
 																		)}
-																	</>
-																) : (
-																	<>
+																	</div>
+																</div>
+															)
+														}
+
+														// Если есть пара "both" - показываем одну карточку
+														if (bothItem) {
+															return (
+																<div key={pairNumber} className='lesson-card'>
+																	<div className='lesson-number'>
+																		{pairNumber}
+																	</div>
+																	<div className='lesson-content'>
 																		<div className='lesson-subject'>
-																			{item.subject}{' '}
-																			{getWeekBadge(item.weekType)}
+																			{bothItem.subject}
 																		</div>
-																		{item.teacher && (
+																		{bothItem.teacher && (
 																			<div className='lesson-teacher'>
-																				{item.teacher}
+																				{bothItem.teacher}
 																			</div>
 																		)}
-																		{item.room && (
+																		{bothItem.room && (
 																			<div className='lesson-room'>
-																				{item.room === 'Дистанционно' ||
-																				item.room === 'Дист'
+																				{bothItem.room === 'Дистанционно' ||
+																				bothItem.room === 'Дист'
 																					? '🏠 Дистанционно'
-																					: `Каб. ${item.room}`}
+																					: `Каб. ${bothItem.room}`}
 																			</div>
 																		)}
-																	</>
-																)}
-															</div>
-														</div>
-													)
-												})}
+																	</div>
+																</div>
+															)
+														}
+
+														// Если есть различия между числителем и знаменателем
+														if (numeratorItem && denominatorItem) {
+															const hasDifference =
+																numeratorItem.subject !==
+																	denominatorItem.subject ||
+																numeratorItem.teacher !==
+																	denominatorItem.teacher ||
+																numeratorItem.room !== denominatorItem.room
+
+															if (hasDifference) {
+																return (
+																	<div
+																		key={pairNumber}
+																		className='lesson-card lesson-card-split'
+																	>
+																		<div className='lesson-number'>
+																			{pairNumber}
+																		</div>
+																		<div className='lesson-content-split'>
+																			<div
+																				className={`lesson-week numerator-week ${currentWeekType === 'numerator' ? 'current-week' : ''}`}
+																			>
+																				<div className='week-indicator'>Ч</div>
+																				<div className='lesson-subject'>
+																					{numeratorItem.subject}
+																				</div>
+																				{numeratorItem.teacher && (
+																					<div className='lesson-teacher'>
+																						{numeratorItem.teacher}
+																					</div>
+																				)}
+																				{numeratorItem.room && (
+																					<div className='lesson-room'>
+																						{numeratorItem.room ===
+																							'Дистанционно' ||
+																						numeratorItem.room === 'Дист'
+																							? '🏠 Дистанционно'
+																							: `Каб. ${numeratorItem.room}`}
+																					</div>
+																				)}
+																			</div>
+																			<div
+																				className={`lesson-week denominator-week ${currentWeekType === 'denominator' ? 'current-week' : ''}`}
+																			>
+																				<div className='week-indicator'>З</div>
+																				<div className='lesson-subject'>
+																					{denominatorItem.subject}
+																				</div>
+																				{denominatorItem.teacher && (
+																					<div className='lesson-teacher'>
+																						{denominatorItem.teacher}
+																					</div>
+																				)}
+																				{denominatorItem.room && (
+																					<div className='lesson-room'>
+																						{denominatorItem.room ===
+																							'Дистанционно' ||
+																						denominatorItem.room === 'Дист'
+																							? '🏠 Дистанционно'
+																							: `Каб. ${denominatorItem.room}`}
+																					</div>
+																				)}
+																			</div>
+																		</div>
+																	</div>
+																)
+															} else {
+																// Одинаковые - показываем одну карточку
+																return (
+																	<div key={pairNumber} className='lesson-card'>
+																		<div className='lesson-number'>
+																			{pairNumber}
+																		</div>
+																		<div className='lesson-content'>
+																			<div className='lesson-subject'>
+																				{numeratorItem.subject}
+																			</div>
+																			{numeratorItem.teacher && (
+																				<div className='lesson-teacher'>
+																					{numeratorItem.teacher}
+																				</div>
+																			)}
+																			{numeratorItem.room && (
+																				<div className='lesson-room'>
+																					{numeratorItem.room ===
+																						'Дистанционно' ||
+																					numeratorItem.room === 'Дист'
+																						? '🏠 Дистанционно'
+																						: `Каб. ${numeratorItem.room}`}
+																				</div>
+																			)}
+																		</div>
+																	</div>
+																)
+															}
+														}
+
+														// Если есть только числитель
+														if (numeratorItem) {
+															return (
+																<div
+																	key={pairNumber}
+																	className={`lesson-card ${currentWeekType === 'numerator' ? '' : 'inactive-week'}`}
+																>
+																	<div className='lesson-number'>
+																		{pairNumber}
+																	</div>
+																	<div className='lesson-content'>
+																		<div className='lesson-subject'>
+																			{numeratorItem.subject}{' '}
+																			<span className='week-badge numerator'>
+																				Ч
+																			</span>
+																		</div>
+																		{numeratorItem.teacher && (
+																			<div className='lesson-teacher'>
+																				{numeratorItem.teacher}
+																			</div>
+																		)}
+																		{numeratorItem.room && (
+																			<div className='lesson-room'>
+																				{numeratorItem.room ===
+																					'Дистанционно' ||
+																				numeratorItem.room === 'Дист'
+																					? '🏠 Дистанционно'
+																					: `Каб. ${numeratorItem.room}`}
+																			</div>
+																		)}
+																	</div>
+																</div>
+															)
+														}
+
+														// Если есть только знаменатель
+														if (denominatorItem) {
+															return (
+																<div
+																	key={pairNumber}
+																	className={`lesson-card ${currentWeekType === 'denominator' ? '' : 'inactive-week'}`}
+																>
+																	<div className='lesson-number'>
+																		{pairNumber}
+																	</div>
+																	<div className='lesson-content'>
+																		<div className='lesson-subject'>
+																			{denominatorItem.subject}{' '}
+																			<span className='week-badge denominator'>
+																				З
+																			</span>
+																		</div>
+																		{denominatorItem.teacher && (
+																			<div className='lesson-teacher'>
+																				{denominatorItem.teacher}
+																			</div>
+																		)}
+																		{denominatorItem.room && (
+																			<div className='lesson-room'>
+																				{denominatorItem.room ===
+																					'Дистанционно' ||
+																				denominatorItem.room === 'Дист'
+																					? '🏠 Дистанционно'
+																					: `Каб. ${denominatorItem.room}`}
+																			</div>
+																		)}
+																	</div>
+																</div>
+															)
+														}
+
+														// Если пары нет, но есть пары после - показываем плашку
+														if (hasClassesAfter) {
+															return (
+																<div
+																	key={pairNumber}
+																	className='lesson-card lunch-card'
+																>
+																	<div className='lesson-number'>🎉</div>
+																	<div className='lesson-content'>
+																		<div
+																			className='lesson-subject'
+																			style={{ color: '#f59e0b' }}
+																		>
+																			Вам не нужно на эту пару
+																		</div>
+																		<div className='lesson-room'>
+																			{pairNumber} пара: окно
+																		</div>
+																	</div>
+																</div>
+															)
+														}
+
+														// Если пары нет вообще - не показываем ничего
+														return null
+													},
+												)}
 											</div>
 										</div>
 									)

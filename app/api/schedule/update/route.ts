@@ -29,3 +29,51 @@ export async function PUT(request: NextRequest) {
 		)
 	}
 }
+
+export async function POST(request: NextRequest) {
+	try {
+		const body = await request.json()
+		const {
+			course,
+			group,
+			groupFull,
+			specialty,
+			dayOfWeek,
+			timeSlot,
+			subject,
+			teacher,
+			room,
+			weekType,
+		} = body
+
+		if (!course || !groupFull || !dayOfWeek || !timeSlot) {
+			return NextResponse.json(
+				{ error: 'Не все обязательные поля заполнены' },
+				{ status: 400 },
+			)
+		}
+
+		const created = await prisma.schedule.create({
+			data: {
+				course: parseInt(course),
+				group: group || groupFull.split('-')[0],
+				groupFull,
+				specialty: specialty || '',
+				dayOfWeek,
+				timeSlot,
+				subject: subject || '',
+				teacher: teacher || '',
+				room: room || null,
+				weekType: weekType || 'both',
+			},
+		})
+
+		return NextResponse.json({ success: true, schedule: created })
+	} catch (error) {
+		console.error('Create error:', error)
+		return NextResponse.json(
+			{ error: 'Ошибка при создании: ' + (error as Error).message },
+			{ status: 500 },
+		)
+	}
+}
