@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
 				})
 			}
 
-			// Дополняем знаменатель парами из числителя, если их там нет
+			// Разделяем записи по типу недели
 			const numeratorEntries = allEntries.filter(
 				e => e.weekType === 'numerator',
 			)
@@ -106,9 +106,20 @@ export async function POST(request: NextRequest) {
 				e => e.weekType === 'denominator',
 			)
 
-			// Для каждой пары числителя проверяем, есть ли она в знаменателе
+			console.log(
+				`Numerator entries: ${numeratorEntries.length}, Denominator entries: ${denominatorEntries.length}`,
+			)
+
+			// Создаем полный набор записей для обеих недель
+			const finalEntries: typeof allEntries = []
+
+			// Добавляем все записи числителя
+			finalEntries.push(...numeratorEntries)
+
+			// Для каждой записи числителя создаем соответствующую запись знаменателя
 			for (const numEntry of numeratorEntries) {
-				const hasDenominator = denominatorEntries.some(
+				// Проверяем, есть ли уже запись знаменателя для этой ячейки
+				const existingDenominator = denominatorEntries.find(
 					denEntry =>
 						denEntry.course === numEntry.course &&
 						denEntry.groupFull === numEntry.groupFull &&
@@ -116,18 +127,44 @@ export async function POST(request: NextRequest) {
 						denEntry.timeSlot === numEntry.timeSlot,
 				)
 
-				// Если в знаменателе нет этой пары - копируем из числителя
-				if (!hasDenominator) {
-					allEntries.push({
+				if (existingDenominator) {
+					// Если есть - добавляем её (она может отличаться)
+					finalEntries.push(existingDenominator)
+				} else {
+					// Если нет - копируем из числителя
+					finalEntries.push({
 						...numEntry,
 						weekType: 'denominator',
 					})
 				}
 			}
 
+			// Также добавляем записи знаменателя, для которых нет числителя
+			for (const denEntry of denominatorEntries) {
+				const hasNumerator = numeratorEntries.some(
+					numEntry =>
+						numEntry.course === denEntry.course &&
+						numEntry.groupFull === denEntry.groupFull &&
+						numEntry.dayOfWeek === denEntry.dayOfWeek &&
+						numEntry.timeSlot === denEntry.timeSlot,
+				)
+
+				if (!hasNumerator) {
+					// Создаем запись числителя из знаменателя
+					finalEntries.push({
+						...denEntry,
+						weekType: 'numerator',
+					})
+					// И добавляем саму запись знаменателя
+					finalEntries.push(denEntry)
+				}
+			}
+
+			console.log(`Final entries to save: ${finalEntries.length}`)
+
 			// Сохраняем расписание - просто создаем все записи
 			await prisma.schedule.createMany({
-				data: allEntries,
+				data: finalEntries,
 				skipDuplicates: true,
 			})
 		}
