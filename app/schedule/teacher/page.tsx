@@ -199,6 +199,39 @@ function TeacherScheduleContent() {
 						</div>
 					) : (
 						<>
+							<div
+								style={{
+									background: 'white',
+									padding: '16px 24px',
+									borderRadius: '28px',
+									boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+									marginBottom: '20px',
+									textAlign: 'center',
+								}}
+							>
+								<div
+									style={{
+										fontSize: '0.9rem',
+										color: '#6b7280',
+										marginBottom: '6px',
+									}}
+								>
+									Текущая неделя
+								</div>
+								<div
+									style={{
+										fontSize: '1.3rem',
+										fontWeight: 600,
+										color:
+											currentWeekType === 'numerator' ? '#9333ea' : '#22c55e',
+									}}
+								>
+									{currentWeekType === 'numerator'
+										? 'Числитель'
+										: 'Знаменатель'}
+								</div>
+							</div>
+
 							<div className='time-legend'>
 								<div className='time-item'>
 									<span className='pair-num'>1 пара</span>
