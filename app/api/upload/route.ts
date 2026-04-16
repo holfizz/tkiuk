@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 				allEntries.find(e => e.teacher),
 			)
 
-			// Собираем уникальных преподавателей
+			// Собираем уникальных преподавателей и разделяем их
 			const teacherNames = new Set<string>()
 			allEntries.forEach(entry => {
 				if (entry.teacher && entry.teacher.trim()) {
@@ -98,11 +98,51 @@ export async function POST(request: NextRequest) {
 				})
 			}
 
+			// НОВАЯ ЛОГИКА: Разделяем записи с несколькими преподавателями
+			const expandedEntries: typeof allEntries = []
+
+			for (const entry of allEntries) {
+				if (entry.teacher && entry.teacher.includes(',')) {
+					// Если есть несколько преподавателей - создаем отдельную запись для каждого
+					const teachers = entry.teacher
+						.split(',')
+						.map(t => t.trim())
+						.filter(t => t)
+
+					// Также разделяем кабинеты, если они указаны через запятую
+					let rooms: string[] = []
+					if (entry.room && entry.room.includes(',')) {
+						rooms = entry.room
+							.split(',')
+							.map(r => r.trim())
+							.filter(r => r)
+					}
+
+					teachers.forEach((teacher, index) => {
+						// Назначаем соответствующий кабинет или используем весь список
+						const room = rooms.length > index ? rooms[index] : entry.room
+
+						expandedEntries.push({
+							...entry,
+							teacher: teacher,
+							room: room,
+						})
+					})
+				} else {
+					// Если один преподаватель - добавляем как есть
+					expandedEntries.push(entry)
+				}
+			}
+
+			console.log(
+				`Expanded entries (after splitting teachers): ${expandedEntries.length}`,
+			)
+
 			// Разделяем записи по типу недели
-			const numeratorEntries = allEntries.filter(
+			const numeratorEntries = expandedEntries.filter(
 				e => e.weekType === 'numerator',
 			)
-			const denominatorEntries = allEntries.filter(
+			const denominatorEntries = expandedEntries.filter(
 				e => e.weekType === 'denominator',
 			)
 
