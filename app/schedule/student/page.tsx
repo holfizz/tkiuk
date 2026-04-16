@@ -216,34 +216,88 @@ function StudentScheduleContent() {
 						<>
 							<div
 								style={{
-									background: 'white',
-									padding: '16px 24px',
+									background:
+										'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+									padding: '20px 28px',
 									borderRadius: '28px',
-									boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-									marginBottom: '20px',
+									boxShadow: '0 8px 32px rgba(59, 130, 246, 0.3)',
+									marginBottom: '24px',
 									textAlign: 'center',
+									border: '3px solid rgba(255, 255, 255, 0.2)',
+									position: 'relative',
+									overflow: 'hidden',
 								}}
 							>
+								{/* Animated background effect */}
 								<div
 									style={{
-										fontSize: '0.9rem',
-										color: '#6b7280',
-										marginBottom: '6px',
+										position: 'absolute',
+										top: 0,
+										left: 0,
+										right: 0,
+										bottom: 0,
+										background:
+											currentWeekType === 'numerator'
+												? 'linear-gradient(45deg, rgba(147, 51, 234, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%)'
+												: 'linear-gradient(45deg, rgba(34, 197, 94, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%)',
+										animation: 'pulse 2s ease-in-out infinite alternate',
 									}}
-								>
-									Текущая неделя
-								</div>
+								/>
 								<div
 									style={{
-										fontSize: '1.3rem',
-										fontWeight: 600,
-										color:
-											currentWeekType === 'numerator' ? '#9333ea' : '#22c55e',
+										position: 'relative',
+										zIndex: 1,
 									}}
 								>
-									{currentWeekType === 'numerator'
-										? 'Числитель'
-										: 'Знаменатель'}
+									<div
+										style={{
+											fontSize: '1rem',
+											color: 'rgba(255, 255, 255, 0.9)',
+											marginBottom: '8px',
+											fontWeight: 500,
+											textTransform: 'uppercase',
+											letterSpacing: '1px',
+										}}
+									>
+										📅 Текущая неделя
+									</div>
+									<div
+										style={{
+											fontSize: '1.8rem',
+											fontWeight: 700,
+											color: 'white',
+											textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+											display: 'flex',
+											alignItems: 'center',
+											justifyContent: 'center',
+											gap: '12px',
+										}}
+										className='week-indicator-mobile'
+									>
+										<span
+											style={{
+												display: 'inline-flex',
+												alignItems: 'center',
+												justifyContent: 'center',
+												width: '48px',
+												height: '48px',
+												borderRadius: '50%',
+												background:
+													currentWeekType === 'numerator'
+														? '#9333ea'
+														: '#22c55e',
+												color: 'white',
+												fontSize: '1.2rem',
+												fontWeight: 900,
+												boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+											}}
+										>
+											{currentWeekType === 'numerator' ? 'Ч' : 'З'}
+										</span>
+										{currentWeekType === 'numerator'
+											? 'Числитель'
+											: 'Знаменатель'}
+									</div>
 								</div>
 							</div>
 
@@ -329,6 +383,57 @@ function StudentScheduleContent() {
 
 														// Если есть замена - показываем её
 														if (replacement) {
+															// Если замена пустая (пустой предмет или "-")
+															if (
+																!replacement.newSubject ||
+																replacement.newSubject.trim() === '' ||
+																replacement.newSubject.trim() === '-'
+															) {
+																return (
+																	<div
+																		key={pairNumber}
+																		className='lesson-card replacement-card'
+																	>
+																		<div className='lesson-number'>
+																			{pairNumber}
+																		</div>
+																		<div className='lesson-content'>
+																			<div className='replacement-badge'>
+																				<svg
+																					xmlns='http://www.w3.org/2000/svg'
+																					width='14'
+																					height='14'
+																					viewBox='0 0 24 24'
+																					style={{ flexShrink: 0 }}
+																				>
+																					<path
+																						fill='currentColor'
+																						d='M14.293 2.293a1 1 0 0 1 1.414 0l4 4a1 1 0 0 1 0 1.414l-4 4a1 1 0 0 1-1.414-1.414L16.586 8H5a1 1 0 0 1 0-2h11.586l-2.293-2.293a1 1 0 0 1 0-1.414m-4.586 10a1 1 0 0 1 0 1.414L7.414 16H19a1 1 0 1 1 0 2H7.414l2.293 2.293a1 1 0 0 1-1.414 1.414l-4-4a1 1 0 0 1 0-1.414l4-4a1 1 0 0 1 1.414 0'
+																					></path>
+																				</svg>
+																				ЗАМЕНА
+																			</div>
+																			<div
+																				className='lesson-subject'
+																				style={{ color: '#f59e0b' }}
+																			>
+																				Пара отменена
+																			</div>
+																			<div className='lesson-teacher'>
+																				{replacement.newTeacher ||
+																					'Занятие не проводится'}
+																			</div>
+																			{replacement.room && (
+																				<div className='lesson-room'>
+																					{replacement.room}
+																				</div>
+																			)}
+																		</div>
+																	</div>
+																)
+															}
+
+															// Обычная замена
 															return (
 																<div
 																	key={pairNumber}
@@ -411,59 +516,89 @@ function StudentScheduleContent() {
 																numeratorItem.room !== denominatorItem.room
 
 															if (hasDifference) {
+																// Показываем только текущую неделю
+																const currentWeekItem =
+																	currentWeekType === 'numerator'
+																		? numeratorItem
+																		: denominatorItem
+																const otherWeekItem =
+																	currentWeekType === 'numerator'
+																		? denominatorItem
+																		: numeratorItem
+
+																// Если есть пара на текущую неделю - показываем её
+																if (currentWeekItem) {
+																	return (
+																		<div
+																			key={pairNumber}
+																			className={`lesson-card ${currentWeekType === 'numerator' ? 'numerator-highlight' : 'denominator-highlight'}`}
+																		>
+																			<div className='lesson-number'>
+																				{pairNumber}
+																			</div>
+																			<div className='lesson-content'>
+																				<div className='lesson-subject'>
+																					{currentWeekItem.subject}{' '}
+																					<span
+																						className={`week-badge ${currentWeekType === 'numerator' ? 'numerator' : 'denominator'}`}
+																					>
+																						{currentWeekType === 'numerator'
+																							? 'Ч'
+																							: 'З'}
+																					</span>
+																				</div>
+																				{currentWeekItem.teacher && (
+																					<div className='lesson-teacher'>
+																						{currentWeekItem.teacher}
+																					</div>
+																				)}
+																				{currentWeekItem.room && (
+																					<div className='lesson-room'>
+																						{currentWeekItem.room ===
+																							'Дистанционно' ||
+																						currentWeekItem.room === 'Дист'
+																							? '🏠 Дистанционно'
+																							: `Каб. ${currentWeekItem.room}`}
+																					</div>
+																				)}
+																			</div>
+																		</div>
+																	)
+																}
+																// Если нет пары на текущую неделю, показываем другую неделю неактивной
 																return (
 																	<div
 																		key={pairNumber}
-																		className='lesson-card lesson-card-split'
+																		className='lesson-card inactive-week'
 																	>
 																		<div className='lesson-number'>
 																			{pairNumber}
 																		</div>
-																		<div className='lesson-content-split'>
-																			<div
-																				className={`lesson-week numerator-week ${currentWeekType === 'numerator' ? 'current-week' : ''}`}
-																			>
-																				<div className='week-indicator'>Ч</div>
-																				<div className='lesson-subject'>
-																					{numeratorItem.subject}
-																				</div>
-																				{numeratorItem.teacher && (
-																					<div className='lesson-teacher'>
-																						{numeratorItem.teacher}
-																					</div>
-																				)}
-																				{numeratorItem.room && (
-																					<div className='lesson-room'>
-																						{numeratorItem.room ===
-																							'Дистанционно' ||
-																						numeratorItem.room === 'Дист'
-																							? '🏠 Дистанционно'
-																							: `Каб. ${numeratorItem.room}`}
-																					</div>
-																				)}
+																		<div className='lesson-content'>
+																			<div className='lesson-subject'>
+																				{otherWeekItem.subject}{' '}
+																				<span
+																					className={`week-badge ${currentWeekType === 'numerator' ? 'denominator' : 'numerator'}`}
+																				>
+																					{currentWeekType === 'numerator'
+																						? 'З'
+																						: 'Ч'}
+																				</span>
 																			</div>
-																			<div
-																				className={`lesson-week denominator-week ${currentWeekType === 'denominator' ? 'current-week' : ''}`}
-																			>
-																				<div className='week-indicator'>З</div>
-																				<div className='lesson-subject'>
-																					{denominatorItem.subject}
+																			{otherWeekItem.teacher && (
+																				<div className='lesson-teacher'>
+																					{otherWeekItem.teacher}
 																				</div>
-																				{denominatorItem.teacher && (
-																					<div className='lesson-teacher'>
-																						{denominatorItem.teacher}
-																					</div>
-																				)}
-																				{denominatorItem.room && (
-																					<div className='lesson-room'>
-																						{denominatorItem.room ===
-																							'Дистанционно' ||
-																						denominatorItem.room === 'Дист'
-																							? '🏠 Дистанционно'
-																							: `Каб. ${denominatorItem.room}`}
-																					</div>
-																				)}
-																			</div>
+																			)}
+																			{otherWeekItem.room && (
+																				<div className='lesson-room'>
+																					{otherWeekItem.room ===
+																						'Дистанционно' ||
+																					otherWeekItem.room === 'Дист'
+																						? '🏠 Дистанционно'
+																						: `Каб. ${otherWeekItem.room}`}
+																				</div>
+																			)}
 																		</div>
 																	</div>
 																)
@@ -503,7 +638,7 @@ function StudentScheduleContent() {
 															return (
 																<div
 																	key={pairNumber}
-																	className={`lesson-card ${currentWeekType === 'numerator' ? '' : 'inactive-week'}`}
+																	className={`lesson-card ${currentWeekType === 'numerator' ? 'numerator-highlight' : 'inactive-week'}`}
 																>
 																	<div className='lesson-number'>
 																		{pairNumber}
@@ -539,7 +674,7 @@ function StudentScheduleContent() {
 															return (
 																<div
 																	key={pairNumber}
-																	className={`lesson-card ${currentWeekType === 'denominator' ? '' : 'inactive-week'}`}
+																	className={`lesson-card ${currentWeekType === 'denominator' ? 'denominator-highlight' : 'inactive-week'}`}
 																>
 																	<div className='lesson-number'>
 																		{pairNumber}
@@ -640,7 +775,7 @@ function StudentScheduleContent() {
 									Посмотреть замены
 								</a>
 								<a
-									href='http://www.tcmc.spb.ru/student/spravka'
+									href='https://sites.google.com/tcmc.spb.ru/zakazspravokit'
 									target='_blank'
 									rel='noopener noreferrer'
 									className='btn-action-secondary'

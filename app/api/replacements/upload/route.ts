@@ -72,15 +72,42 @@ export async function POST(request: NextRequest) {
 			// [6] Дисциплина (снято), [7] Преподаватель (снято), [8] Дисциплина (назначено), [9] Преподаватель (назначено)
 
 			const groupFull = cells[0]
-			const pairNumber = parseInt(cells[1])
+			const pairNumberStr = cells[1]
 
 			// Проверяем что это валидная группа
 			if (!groupFull.match(/^\d{1,2}[А-Яа-я]{1,3}-\d{1,2}/)) {
 				continue
 			}
 
+			// Обрабатываем множественные пары (3,4 или 1-3)
+			let pairNumbers: number[] = []
+
+			if (pairNumberStr.includes(',')) {
+				// Формат "3,4" - разделяем по запятой
+				pairNumbers = pairNumberStr
+					.split(',')
+					.map(p => parseInt(p.trim()))
+					.filter(p => !isNaN(p))
+			} else if (pairNumberStr.includes('-')) {
+				// Формат "1-3" - диапазон пар
+				const [start, end] = pairNumberStr
+					.split('-')
+					.map(p => parseInt(p.trim()))
+				if (!isNaN(start) && !isNaN(end) && start <= end) {
+					for (let i = start; i <= end; i++) {
+						pairNumbers.push(i)
+					}
+				}
+			} else {
+				// Одна пара
+				const singlePair = parseInt(pairNumberStr)
+				if (!isNaN(singlePair)) {
+					pairNumbers = [singlePair]
+				}
+			}
+
 			console.log(
-				`Row ${i}: Group=${groupFull}, Pair=${pairNumber}, Cells=${cells.length}`,
+				`Row ${i}: Group=${groupFull}, Pairs=${pairNumbers.join(',')}, Cells=${cells.length}`,
 			)
 			console.log(`  All cells:`, cells)
 
@@ -108,19 +135,23 @@ export async function POST(request: NextRequest) {
 				`  Parsed: Subject="${newSubject}", Teacher="${newTeacher}", Room="${room}"`,
 			)
 
-			if (newSubject && newTeacher && !isNaN(pairNumber)) {
-				replacements.push({
-					date: replacementDate,
-					course,
-					groupFull,
-					pairNumber,
-					originalSubject: null as string | null,
-					newSubject: newSubject.trim(),
-					originalTeacher: null as string | null,
-					newTeacher: newTeacher.trim(),
-					room: room || null,
-					notes: null,
-				})
+			// Создаем замену для каждой пары в списке
+			for (const pairNumber of pairNumbers) {
+				if (pairNumber >= 1 && pairNumber <= 4) {
+					// Даже если предмет пустой, создаем замену (отмена пары)
+					replacements.push({
+						date: replacementDate,
+						course,
+						groupFull,
+						pairNumber,
+						originalSubject: null as string | null,
+						newSubject: newSubject.trim() || '', // Может быть пустым для отмены
+						originalTeacher: null as string | null,
+						newTeacher: newTeacher.trim() || '', // Может быть пустым для отмены
+						room: room || null,
+						notes: null,
+					})
+				}
 			}
 		}
 

@@ -576,22 +576,35 @@ export default function AdminUpload() {
 
 					{activeTab === 'view' && (
 						<div className='selection-container'>
-							<div className='admin-legend'>
-								<div className='legend-item'>
-									<div className='legend-color empty-cell'></div>
-									<span>Нет пары</span>
-								</div>
-								<div className='legend-item'>
-									<div className='legend-color numerator-cell'></div>
-									<span>Числитель</span>
-								</div>
-								<div className='legend-item'>
-									<div className='legend-color denominator-cell'></div>
-									<span>Знаменатель</span>
-								</div>
-								<div className='legend-item'>
-									<div className='legend-color replacement-cell'></div>
-									<span>Замена</span>
+							<div style={{ marginBottom: '16px' }}>
+								<h3
+									style={{
+										fontSize: '1.1rem',
+										fontWeight: 600,
+										color: '#374151',
+										marginBottom: '12px',
+										textAlign: 'center',
+									}}
+								>
+									Обозначения:
+								</h3>
+								<div className='admin-legend'>
+									<div className='legend-item'>
+										<div className='legend-color empty-cell'></div>
+										<span>Нет пары</span>
+									</div>
+									<div className='legend-item'>
+										<div className='legend-color numerator-cell'></div>
+										<span>Числитель</span>
+									</div>
+									<div className='legend-item'>
+										<div className='legend-color denominator-cell'></div>
+										<span>Знаменатель</span>
+									</div>
+									<div className='legend-item'>
+										<div className='legend-color replacement-cell'></div>
+										<span>Замена</span>
+									</div>
 								</div>
 							</div>
 

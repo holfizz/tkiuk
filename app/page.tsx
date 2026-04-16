@@ -57,10 +57,26 @@ export default function Home() {
 		setRole(selectedRole)
 
 		if (selectedRole === 'teacher' || selectedRole === 'lookup') {
-			const res = await fetch('/api/teachers')
-			const data = await res.json()
-			setAvailableTeachers(data.teachers)
-			setFilteredTeachers(data.teachers)
+			try {
+				const res = await fetch('/api/teachers')
+				if (!res.ok) {
+					throw new Error(`HTTP error! status: ${res.status}`)
+				}
+				const text = await res.text()
+				if (!text) {
+					console.warn('Empty response from /api/teachers')
+					setAvailableTeachers([])
+					setFilteredTeachers([])
+					return
+				}
+				const data = JSON.parse(text)
+				setAvailableTeachers(data.teachers || [])
+				setFilteredTeachers(data.teachers || [])
+			} catch (error) {
+				console.error('Error fetching teachers:', error)
+				setAvailableTeachers([])
+				setFilteredTeachers([])
+			}
 		}
 	}
 
@@ -70,9 +86,23 @@ export default function Home() {
 		setAvailableGroups([])
 
 		if (selectedCourse) {
-			const res = await fetch(`/api/groups?course=${selectedCourse}`)
-			const data = await res.json()
-			setAvailableGroups(data.groups.sort())
+			try {
+				const res = await fetch(`/api/groups?course=${selectedCourse}`)
+				if (!res.ok) {
+					throw new Error(`HTTP error! status: ${res.status}`)
+				}
+				const text = await res.text()
+				if (!text) {
+					console.warn('Empty response from /api/groups')
+					setAvailableGroups([])
+					return
+				}
+				const data = JSON.parse(text)
+				setAvailableGroups((data.groups || []).sort())
+			} catch (error) {
+				console.error('Error fetching groups:', error)
+				setAvailableGroups([])
+			}
 		}
 	}
 
@@ -182,7 +212,7 @@ export default function Home() {
 										Посмотреть замены
 									</button>
 									<a
-										href='http://www.tcmc.spb.ru/student/spravka'
+										href='https://sites.google.com/tcmc.spb.ru/zakazspravokit'
 										target='_blank'
 										rel='noopener noreferrer'
 										className='btn-action-secondary'

@@ -117,14 +117,23 @@ function TeacherScheduleContent() {
 
 		return days.map(day => {
 			const daySchedule = timeSlots.map((time, index) => {
-				// Находим все версии для этого времени
-				const items = schedule.filter(
-					s => s.dayOfWeek === day && s.timeSlot === time,
+				// Находим все пары для этого времени
+				const numeratorItems = schedule.filter(
+					s =>
+						s.dayOfWeek === day &&
+						s.timeSlot === time &&
+						s.weekType === 'numerator',
 				)
-
-				const numeratorItems = items.filter(s => s.weekType === 'numerator')
-				const denominatorItems = items.filter(s => s.weekType === 'denominator')
-				const bothItems = items.filter(s => s.weekType === 'both')
+				const denominatorItems = schedule.filter(
+					s =>
+						s.dayOfWeek === day &&
+						s.timeSlot === time &&
+						s.weekType === 'denominator',
+				)
+				const bothItems = schedule.filter(
+					s =>
+						s.dayOfWeek === day && s.timeSlot === time && s.weekType === 'both',
+				)
 
 				return {
 					pairNumber: index + 1,
@@ -201,34 +210,88 @@ function TeacherScheduleContent() {
 						<>
 							<div
 								style={{
-									background: 'white',
-									padding: '16px 24px',
+									background:
+										'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+									padding: '20px 28px',
 									borderRadius: '28px',
-									boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-									marginBottom: '20px',
+									boxShadow: '0 8px 32px rgba(59, 130, 246, 0.3)',
+									marginBottom: '24px',
 									textAlign: 'center',
+									border: '3px solid rgba(255, 255, 255, 0.2)',
+									position: 'relative',
+									overflow: 'hidden',
 								}}
 							>
+								{/* Animated background effect */}
 								<div
 									style={{
-										fontSize: '0.9rem',
-										color: '#6b7280',
-										marginBottom: '6px',
+										position: 'absolute',
+										top: 0,
+										left: 0,
+										right: 0,
+										bottom: 0,
+										background:
+											currentWeekType === 'numerator'
+												? 'linear-gradient(45deg, rgba(147, 51, 234, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%)'
+												: 'linear-gradient(45deg, rgba(34, 197, 94, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%)',
+										animation: 'pulse 2s ease-in-out infinite alternate',
 									}}
-								>
-									Текущая неделя
-								</div>
+								/>
 								<div
 									style={{
-										fontSize: '1.3rem',
-										fontWeight: 600,
-										color:
-											currentWeekType === 'numerator' ? '#9333ea' : '#22c55e',
+										position: 'relative',
+										zIndex: 1,
 									}}
 								>
-									{currentWeekType === 'numerator'
-										? 'Числитель'
-										: 'Знаменатель'}
+									<div
+										style={{
+											fontSize: '1rem',
+											color: 'rgba(255, 255, 255, 0.9)',
+											marginBottom: '8px',
+											fontWeight: 500,
+											textTransform: 'uppercase',
+											letterSpacing: '1px',
+										}}
+									>
+										📅 Текущая неделя
+									</div>
+									<div
+										style={{
+											fontSize: '1.8rem',
+											fontWeight: 700,
+											color: 'white',
+											textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+											display: 'flex',
+											alignItems: 'center',
+											justifyContent: 'center',
+											gap: '12px',
+										}}
+										className='week-indicator-mobile'
+									>
+										<span
+											style={{
+												display: 'inline-flex',
+												alignItems: 'center',
+												justifyContent: 'center',
+												width: '48px',
+												height: '48px',
+												borderRadius: '50%',
+												background:
+													currentWeekType === 'numerator'
+														? '#9333ea'
+														: '#22c55e',
+												color: 'white',
+												fontSize: '1.2rem',
+												fontWeight: 900,
+												boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+											}}
+										>
+											{currentWeekType === 'numerator' ? 'Ч' : 'З'}
+										</span>
+										{currentWeekType === 'numerator'
+											? 'Числитель'
+											: 'Знаменатель'}
+									</div>
 								</div>
 							</div>
 
@@ -305,32 +368,49 @@ function TeacherScheduleContent() {
 														denominatorItems,
 														bothItems,
 													}) => {
+														// Проверяем есть ли замены на сегодня для этой пары
 														const allItems = [
 															...numeratorItems,
 															...denominatorItems,
 															...bothItems,
 														]
-														if (allItems.length === 0) return null
 
-														const isToday = day === getTodayDayName()
+														const replacements = isToday
+															? allItems
+																	.map(item =>
+																		getReplacement(item.groupFull, pairNumber),
+																	)
+																	.filter(Boolean)
+															: []
 
-														return allItems.map((item, idx) => {
-															// Проверяем есть ли замена на сегодня
-															const replacement = isToday
-																? getReplacement(item.groupFull, pairNumber)
-																: null
+														// Проверяем, есть ли пары после текущей
+														const hasClassesAfter = daySchedule
+															.slice(
+																daySchedule.findIndex(
+																	s => s.pairNumber === pairNumber,
+																) + 1,
+															)
+															.some(
+																s =>
+																	s.numeratorItems.length > 0 ||
+																	s.denominatorItems.length > 0 ||
+																	s.bothItems.length > 0,
+															)
 
-															return (
-																<div
-																	key={`${pairNumber}-${idx}`}
-																	className={`lesson-card ${replacement ? 'replacement-card' : ''}`}
-																>
-																	<div className='lesson-number'>
-																		{pairNumber}
-																	</div>
-																	<div className='lesson-content'>
-																		{replacement ? (
-																			<>
+														// Если есть замены - показываем их
+														if (replacements.length > 0) {
+															return replacements
+																.map((replacement, idx) => {
+																	if (!replacement) return null
+																	return (
+																		<div
+																			key={`${pairNumber}-replacement-${idx}`}
+																			className='lesson-card replacement-card'
+																		>
+																			<div className='lesson-number'>
+																				{pairNumber}
+																			</div>
+																			<div className='lesson-content'>
 																				<div className='replacement-badge'>
 																					<svg
 																						xmlns='http://www.w3.org/2000/svg'
@@ -361,15 +441,147 @@ function TeacherScheduleContent() {
 																							: `Каб. ${replacement.room}`}
 																					</div>
 																				)}
-																			</>
-																		) : (
-																			<>
+																			</div>
+																		</div>
+																	)
+																})
+																.filter(Boolean)
+														}
+
+														// Если есть пары "both" - показываем их отдельно, группируя одинаковые
+														if (bothItems.length > 0) {
+															// Группируем одинаковые пары
+															const groupedItems = bothItems.reduce(
+																(acc: any[], item) => {
+																	const existing = acc.find(
+																		grouped =>
+																			grouped.subject === item.subject &&
+																			grouped.teacher === item.teacher &&
+																			grouped.room === item.room,
+																	)
+																	if (existing) {
+																		existing.groups.push(item.groupFull)
+																	} else {
+																		acc.push({
+																			...item,
+																			groups: [item.groupFull],
+																		})
+																	}
+																	return acc
+																},
+																[],
+															)
+
+															return groupedItems.map((item, idx) => (
+																<div
+																	key={`${pairNumber}-both-${idx}`}
+																	className='lesson-card'
+																>
+																	<div className='lesson-number'>
+																		{pairNumber}
+																	</div>
+																	<div className='lesson-content'>
+																		<div className='lesson-subject'>
+																			{item.subject}
+																		</div>
+																		<div className='lesson-teacher'>
+																			{item.groups.join(', ')}
+																		</div>
+																		{item.room && (
+																			<div className='lesson-room'>
+																				{item.room === 'Дистанционно' ||
+																				item.room === 'Дист'
+																					? '🏠 Дистанционно'
+																					: `Каб. ${item.room}`}
+																			</div>
+																		)}
+																	</div>
+																</div>
+															))
+														}
+
+														// Если есть различия между числителем и знаменателем - показываем только текущую неделю
+														if (
+															numeratorItems.length > 0 &&
+															denominatorItems.length > 0
+														) {
+															const currentWeekItems =
+																currentWeekType === 'numerator'
+																	? numeratorItems
+																	: denominatorItems
+															const otherWeekItems =
+																currentWeekType === 'numerator'
+																	? denominatorItems
+																	: numeratorItems
+
+															const hasDifference =
+																numeratorItems.some(
+																	numItem =>
+																		!denominatorItems.some(
+																			denItem =>
+																				numItem.subject === denItem.subject &&
+																				numItem.groupFull ===
+																					denItem.groupFull &&
+																				numItem.room === denItem.room,
+																		),
+																) ||
+																denominatorItems.some(
+																	denItem =>
+																		!numeratorItems.some(
+																			numItem =>
+																				denItem.subject === numItem.subject &&
+																				denItem.groupFull ===
+																					numItem.groupFull &&
+																				denItem.room === numItem.room,
+																		),
+																)
+
+															if (hasDifference) {
+																// Показываем только текущую неделю с цветовым подчеркиванием
+																if (currentWeekItems.length > 0) {
+																	// Группируем одинаковые пары
+																	const groupedItems = currentWeekItems.reduce(
+																		(acc: any[], item) => {
+																			const existing = acc.find(
+																				grouped =>
+																					grouped.subject === item.subject &&
+																					grouped.teacher === item.teacher &&
+																					grouped.room === item.room,
+																			)
+																			if (existing) {
+																				existing.groups.push(item.groupFull)
+																			} else {
+																				acc.push({
+																					...item,
+																					groups: [item.groupFull],
+																				})
+																			}
+																			return acc
+																		},
+																		[],
+																	)
+
+																	return groupedItems.map((item, idx) => (
+																		<div
+																			key={`${pairNumber}-current-${idx}`}
+																			className={`lesson-card ${currentWeekType === 'numerator' ? 'numerator-highlight' : 'denominator-highlight'}`}
+																		>
+																			<div className='lesson-number'>
+																				{pairNumber}
+																			</div>
+																			<div className='lesson-content'>
 																				<div className='lesson-subject'>
 																					{item.subject}{' '}
-																					{getWeekBadge(item.weekType)}
+																					<span
+																						className={`week-badge ${currentWeekType === 'numerator' ? 'numerator' : 'denominator'}`}
+																					>
+																						{currentWeekType === 'numerator'
+																							? 'Ч'
+																							: 'З'}
+																					</span>
 																				</div>
 																				<div className='lesson-teacher'>
-																					{item.groupFull}
+																					{item.groups.join(', ')}
 																				</div>
 																				{item.room && (
 																					<div className='lesson-room'>
@@ -379,12 +591,231 @@ function TeacherScheduleContent() {
 																							: `Каб. ${item.room}`}
 																					</div>
 																				)}
-																			</>
+																			</div>
+																		</div>
+																	))
+																}
+																// Если нет пар на текущую неделю, показываем другую неделю неактивной
+																return otherWeekItems.map((item, idx) => (
+																	<div
+																		key={`${pairNumber}-other-${idx}`}
+																		className='lesson-card inactive-week'
+																	>
+																		<div className='lesson-number'>
+																			{pairNumber}
+																		</div>
+																		<div className='lesson-content'>
+																			<div className='lesson-subject'>
+																				{item.subject}{' '}
+																				<span
+																					className={`week-badge ${currentWeekType === 'numerator' ? 'denominator' : 'numerator'}`}
+																				>
+																					{currentWeekType === 'numerator'
+																						? 'З'
+																						: 'Ч'}
+																				</span>
+																			</div>
+																			<div className='lesson-teacher'>
+																				{item.groupFull}
+																			</div>
+																			{item.room && (
+																				<div className='lesson-room'>
+																					{item.room === 'Дистанционно' ||
+																					item.room === 'Дист'
+																						? '🏠 Дистанционно'
+																						: `Каб. ${item.room}`}
+																				</div>
+																			)}
+																		</div>
+																	</div>
+																))
+															} else {
+																// Одинаковые - показываем как обычные пары, группируя их
+																const groupedItems = numeratorItems.reduce(
+																	(acc: any[], item) => {
+																		const existing = acc.find(
+																			grouped =>
+																				grouped.subject === item.subject &&
+																				grouped.teacher === item.teacher &&
+																				grouped.room === item.room,
+																		)
+																		if (existing) {
+																			existing.groups.push(item.groupFull)
+																		} else {
+																			acc.push({
+																				...item,
+																				groups: [item.groupFull],
+																			})
+																		}
+																		return acc
+																	},
+																	[],
+																)
+
+																return groupedItems.map((item, idx) => (
+																	<div
+																		key={`${pairNumber}-same-${idx}`}
+																		className='lesson-card'
+																	>
+																		<div className='lesson-number'>
+																			{pairNumber}
+																		</div>
+																		<div className='lesson-content'>
+																			<div className='lesson-subject'>
+																				{item.subject}
+																			</div>
+																			<div className='lesson-teacher'>
+																				{item.groups.join(', ')}
+																			</div>
+																			{item.room && (
+																				<div className='lesson-room'>
+																					{item.room === 'Дистанционно' ||
+																					item.room === 'Дист'
+																						? '🏠 Дистанционно'
+																						: `Каб. ${item.room}`}
+																				</div>
+																			)}
+																		</div>
+																	</div>
+																))
+															}
+														}
+
+														// Если есть только числитель
+														if (numeratorItems.length > 0) {
+															// Группируем одинаковые пары
+															const groupedItems = numeratorItems.reduce(
+																(acc: any[], item) => {
+																	const existing = acc.find(
+																		grouped =>
+																			grouped.subject === item.subject &&
+																			grouped.teacher === item.teacher &&
+																			grouped.room === item.room,
+																	)
+																	if (existing) {
+																		existing.groups.push(item.groupFull)
+																	} else {
+																		acc.push({
+																			...item,
+																			groups: [item.groupFull],
+																		})
+																	}
+																	return acc
+																},
+																[],
+															)
+
+															return groupedItems.map((item, idx) => (
+																<div
+																	key={`${pairNumber}-num-${idx}`}
+																	className={`lesson-card ${currentWeekType === 'numerator' ? 'numerator-highlight' : 'inactive-week'}`}
+																>
+																	<div className='lesson-number'>
+																		{pairNumber}
+																	</div>
+																	<div className='lesson-content'>
+																		<div className='lesson-subject'>
+																			{item.subject}{' '}
+																			<span className='week-badge numerator'>
+																				Ч
+																			</span>
+																		</div>
+																		<div className='lesson-teacher'>
+																			{item.groups.join(', ')}
+																		</div>
+																		{item.room && (
+																			<div className='lesson-room'>
+																				{item.room === 'Дистанционно' ||
+																				item.room === 'Дист'
+																					? '🏠 Дистанционно'
+																					: `Каб. ${item.room}`}
+																			</div>
 																		)}
 																	</div>
 																</div>
+															))
+														}
+
+														// Если есть только знаменатель
+														if (denominatorItems.length > 0) {
+															// Группируем одинаковые пары
+															const groupedItems = denominatorItems.reduce(
+																(acc: any[], item) => {
+																	const existing = acc.find(
+																		grouped =>
+																			grouped.subject === item.subject &&
+																			grouped.teacher === item.teacher &&
+																			grouped.room === item.room,
+																	)
+																	if (existing) {
+																		existing.groups.push(item.groupFull)
+																	} else {
+																		acc.push({
+																			...item,
+																			groups: [item.groupFull],
+																		})
+																	}
+																	return acc
+																},
+																[],
 															)
-														})
+
+															return groupedItems.map((item, idx) => (
+																<div
+																	key={`${pairNumber}-den-${idx}`}
+																	className={`lesson-card ${currentWeekType === 'denominator' ? 'denominator-highlight' : 'inactive-week'}`}
+																>
+																	<div className='lesson-number'>
+																		{pairNumber}
+																	</div>
+																	<div className='lesson-content'>
+																		<div className='lesson-subject'>
+																			{item.subject}{' '}
+																			<span className='week-badge denominator'>
+																				З
+																			</span>
+																		</div>
+																		<div className='lesson-teacher'>
+																			{item.groups.join(', ')}
+																		</div>
+																		{item.room && (
+																			<div className='lesson-room'>
+																				{item.room === 'Дистанционно' ||
+																				item.room === 'Дист'
+																					? '🏠 Дистанционно'
+																					: `Каб. ${item.room}`}
+																			</div>
+																		)}
+																	</div>
+																</div>
+															))
+														}
+
+														// Если пары нет, но есть пары после - показываем плашку
+														if (hasClassesAfter) {
+															return (
+																<div
+																	key={pairNumber}
+																	className='lesson-card lunch-card'
+																>
+																	<div className='lesson-number'>🎉</div>
+																	<div className='lesson-content'>
+																		<div
+																			className='lesson-subject'
+																			style={{ color: '#f59e0b' }}
+																		>
+																			Свободное время
+																		</div>
+																		<div className='lesson-room'>
+																			{pairNumber} пара: окно
+																		</div>
+																	</div>
+																</div>
+															)
+														}
+
+														// Если пары нет вообще - не показываем ничего
+														return null
 													},
 												)}
 											</div>
@@ -417,7 +848,7 @@ function TeacherScheduleContent() {
 								}}
 							>
 								<a
-									href='http://www.tcmc.spb.ru/student/spravka'
+									href='https://sites.google.com/tcmc.spb.ru/zakazspravokit'
 									target='_blank'
 									rel='noopener noreferrer'
 									className='btn-action-secondary'
