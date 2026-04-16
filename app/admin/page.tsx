@@ -706,7 +706,8 @@ export default function AdminUpload() {
 												if (row.isDay) {
 													return (
 														<tr key={`day-${idx}`} className='day-row'>
-															<td colSpan={2 + groups.length}>{row.day}</td>
+															<td className='sticky-col'>{row.day}</td>
+															<td colSpan={1 + groups.length}></td>
 														</tr>
 													)
 												}

@@ -1607,6 +1607,16 @@ tbody tr:hover {
 	background: #f3f4f6;
 }
 
+.day-row .sticky-col {
+	position: sticky;
+	left: 0;
+	z-index: 9;
+	font-weight: 700;
+	font-size: 1rem;
+	color: #3b82f6;
+	background: #f3f4f6;
+}
+
 .schedule-cell {
 	min-width: 200px;
 	vertical-align: top;
