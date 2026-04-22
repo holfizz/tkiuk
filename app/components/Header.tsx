@@ -65,13 +65,12 @@ export default function Header({
 						}}
 					>
 						<img
-							src='/logo.jpg'
+							src='/logo.svg'
 							alt='АИТУ'
 							style={{
-								width: '64px',
-								height: '64px',
-								borderRadius: '16px',
-								objectFit: 'cover',
+								width: '56px',
+								height: '56px',
+								objectFit: 'contain',
 							}}
 						/>
 						<div>
