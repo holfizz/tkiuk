@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { calculateCurrentWeekType } from '@/lib/weekCalculator'
 import { NextRequest, NextResponse } from 'next/server'
 
 // Helper function to retry database operations
@@ -33,15 +34,27 @@ async function retryOperation<T>(
 
 export async function GET() {
 	try {
+		// Автоматически вычисляем текущую неделю
+		const calculatedWeekType = calculateCurrentWeekType()
+
 		const settings = await retryOperation(async () => {
 			let settings = await prisma.weekSettings.findFirst()
 
 			if (!settings) {
-				// Создаем настройки по умолчанию
+				// Создаем настройки с автоматически вычисленным типом недели
 				settings = await prisma.weekSettings.create({
 					data: {
-						currentWeekType: 'numerator',
+						currentWeekType: calculatedWeekType,
 						startDate: new Date().toISOString().split('T')[0],
+					},
+				})
+			} else {
+				// Обновляем тип недели на основе расчета
+				settings = await prisma.weekSettings.update({
+					where: { id: settings.id },
+					data: {
+						currentWeekType: calculatedWeekType,
+						updatedAt: new Date(),
 					},
 				})
 			}
@@ -53,12 +66,13 @@ export async function GET() {
 	} catch (error: any) {
 		console.error('Get week settings error:', error)
 
-		// Return default settings if database is unavailable
+		// Return default settings with calculated week type if database is unavailable
 		if (error.code === 'P1017' || error.message?.includes('connection')) {
+			const calculatedWeekType = calculateCurrentWeekType()
 			return NextResponse.json({
 				settings: {
 					id: 1,
-					currentWeekType: 'numerator',
+					currentWeekType: calculatedWeekType,
 					startDate: new Date().toISOString().split('T')[0],
 					updatedAt: new Date(),
 				},
