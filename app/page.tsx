@@ -11,10 +11,12 @@ export default function Home() {
 	)
 	const [course, setCourse] = useState('')
 	const [selectedGroup, setSelectedGroup] = useState('')
+	const [campus, setCampus] = useState<'MAIN' | 'SECONDARY'>('SECONDARY')
 	const [teacherSearch, setTeacherSearch] = useState('')
 	const [availableGroups, setAvailableGroups] = useState<string[]>([])
 	const [availableTeachers, setAvailableTeachers] = useState<string[]>([])
 	const [filteredTeachers, setFilteredTeachers] = useState<string[]>([])
+	const [loadingGroups, setLoadingGroups] = useState(false)
 	const router = useRouter()
 
 	useEffect(() => {
@@ -39,11 +41,16 @@ export default function Home() {
 		const savedRole = localStorage.getItem('userRole')
 		const savedCourse = localStorage.getItem('userCourse')
 		const savedGroup = localStorage.getItem('userGroup')
+		const savedCampus =
+			(localStorage.getItem('userCampus') as 'MAIN' | 'SECONDARY') ||
+			'SECONDARY'
 		const savedTeacher = localStorage.getItem('userTeacher')
 
 		// Редиректим только если сохранена роль student или teacher
 		if (savedRole === 'student' && savedCourse && savedGroup) {
-			router.push(`/schedule/student?course=${savedCourse}&group=${savedGroup}`)
+			router.push(
+				`/schedule/student?course=${savedCourse}&group=${savedGroup}&campus=${savedCampus}`,
+			)
 		} else if (savedRole === 'teacher' && savedTeacher) {
 			router.push(
 				`/schedule/teacher?teacher=${encodeURIComponent(savedTeacher)}`,
@@ -84,10 +91,13 @@ export default function Home() {
 		setCourse(selectedCourse)
 		setSelectedGroup('')
 		setAvailableGroups([])
+		setLoadingGroups(true)
 
 		if (selectedCourse) {
 			try {
-				const res = await fetch(`/api/groups?course=${selectedCourse}`)
+				const res = await fetch(
+					`/api/groups?course=${selectedCourse}&campus=${campus}`,
+				)
 				if (!res.ok) {
 					throw new Error(`HTTP error! status: ${res.status}`)
 				}
@@ -95,6 +105,7 @@ export default function Home() {
 				if (!text) {
 					console.warn('Empty response from /api/groups')
 					setAvailableGroups([])
+					setLoadingGroups(false)
 					return
 				}
 				const data = JSON.parse(text)
@@ -102,7 +113,11 @@ export default function Home() {
 			} catch (error) {
 				console.error('Error fetching groups:', error)
 				setAvailableGroups([])
+			} finally {
+				setLoadingGroups(false)
 			}
+		} else {
+			setLoadingGroups(false)
 		}
 	}
 
@@ -125,7 +140,10 @@ export default function Home() {
 			localStorage.setItem('userRole', 'student')
 			localStorage.setItem('userCourse', course)
 			localStorage.setItem('userGroup', selectedGroup)
-			router.push(`/schedule/student?course=${course}&group=${selectedGroup}`)
+			localStorage.setItem('userCampus', campus)
+			router.push(
+				`/schedule/student?course=${course}&group=${selectedGroup}&campus=${campus}`,
+			)
 		} else if ((role === 'teacher' || role === 'lookup') && teacherSearch) {
 			// Проверяем, что преподаватель действительно существует в базе
 			if (!availableTeachers.includes(teacherSearch)) {
@@ -243,6 +261,91 @@ export default function Home() {
 								Назад к выбору роли
 							</button>
 
+							<div style={{ marginBottom: '24px', textAlign: 'center' }}>
+								<h3
+									style={{
+										fontSize: '1.1rem',
+										marginBottom: '12px',
+										color: '#374151',
+									}}
+								>
+									Выберите площадку
+								</h3>
+								<div
+									style={{
+										display: 'flex',
+										gap: '8px',
+										justifyContent: 'center',
+										background: 'white',
+										padding: '6px',
+										borderRadius: '20px',
+										border: '2px solid #e5e7eb',
+										maxWidth: '600px',
+										margin: '0 auto',
+									}}
+								>
+									<button
+										onClick={() => {
+											setCampus('MAIN')
+											setCourse('')
+											setSelectedGroup('')
+											setLoadingGroups(false)
+										}}
+										style={{
+											flex: 1,
+											padding: '12px 16px',
+											border: 'none',
+											borderRadius: '16px',
+											background: campus === 'MAIN' ? '#3b82f6' : 'transparent',
+											color: campus === 'MAIN' ? 'white' : '#6b7280',
+											fontSize: '0.9rem',
+											fontWeight: 600,
+											cursor: 'pointer',
+											transition: 'all 0.2s',
+											fontFamily: 'LT Superior, sans-serif',
+											textAlign: 'center',
+											lineHeight: '1.4',
+										}}
+									>
+										1 площадка
+										<br />
+										<span style={{ fontSize: '0.75rem', opacity: 0.9 }}>
+											(ул. Тобольская)
+										</span>
+									</button>
+									<button
+										onClick={() => {
+											setCampus('SECONDARY')
+											setCourse('')
+											setSelectedGroup('')
+											setLoadingGroups(false)
+										}}
+										style={{
+											flex: 1,
+											padding: '12px 16px',
+											border: 'none',
+											borderRadius: '16px',
+											background:
+												campus === 'SECONDARY' ? '#3b82f6' : 'transparent',
+											color: campus === 'SECONDARY' ? 'white' : '#6b7280',
+											fontSize: '0.9rem',
+											fontWeight: 600,
+											cursor: 'pointer',
+											transition: 'all 0.2s',
+											fontFamily: 'LT Superior, sans-serif',
+											textAlign: 'center',
+											lineHeight: '1.4',
+										}}
+									>
+										2 площадка
+										<br />
+										<span style={{ fontSize: '0.75rem', opacity: 0.9 }}>
+											(Пр. Кондратьевский)
+										</span>
+									</button>
+								</div>
+							</div>
+
 							<div className='steps-container'>
 								<div className={`step-card ${course ? 'completed' : 'active'}`}>
 									<div className='step-number'>01</div>
@@ -260,7 +363,30 @@ export default function Home() {
 									</select>
 								</div>
 
-								{course && availableGroups.length > 0 && (
+								{course && !loadingGroups && availableGroups.length === 0 && (
+									<div className='step-card'>
+										<p
+											style={{
+												textAlign: 'center',
+												color: '#f59e0b',
+												fontSize: '1rem',
+											}}
+										>
+											⚠️ Пока что администраторы не загрузили расписание для
+											этой площадки
+										</p>
+									</div>
+								)}
+
+								{course && loadingGroups && (
+									<div className='step-card'>
+										<p style={{ textAlign: 'center', color: '#6b7280' }}>
+											Загрузка групп...
+										</p>
+									</div>
+								)}
+
+								{course && !loadingGroups && availableGroups.length > 0 && (
 									<div
 										className={`step-card ${selectedGroup ? 'completed' : 'active'}`}
 									>

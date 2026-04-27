@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
 			teacher,
 			room,
 			weekType,
+			campus,
 		} = body
 
 		if (!course || !groupFull || !dayOfWeek || !timeSlot) {
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
 				teacher: teacher || '',
 				room: room || null,
 				weekType: weekType || 'both',
+				campus: (campus || 'MAIN') as any,
 			},
 		})
 

@@ -7,17 +7,25 @@ export async function POST(request: NextRequest) {
 		const formData = await request.formData()
 		const file = formData.get('file') as File
 		const course = parseInt(formData.get('course') as string)
+		const campus = (formData.get('campus') as string) || 'MAIN'
 
 		if (!file) {
 			return NextResponse.json({ error: 'Файл не найден' }, { status: 400 })
 		}
 
+		if (!['MAIN', 'SECONDARY'].includes(campus)) {
+			return NextResponse.json({ error: 'Неверная площадка' }, { status: 400 })
+		}
+
 		const buffer = Buffer.from(await file.arrayBuffer())
 		const workbook = XLSX.read(buffer, { type: 'buffer' })
 
-		// Удаляем старые записи для этого курса
+		// Удаляем старые записи для этого курса и площадки
 		await prisma.schedule.deleteMany({
-			where: { course },
+			where: {
+				course,
+				campus: campus as any,
+			},
 		})
 
 		const allEntries: Array<{
@@ -31,6 +39,7 @@ export async function POST(request: NextRequest) {
 			teacher: string
 			room: string | null
 			weekType: string
+			campus: string
 		}> = []
 
 		// Обрабатываем каждый лист в файле
@@ -57,7 +66,7 @@ export async function POST(request: NextRequest) {
 			const sheet = workbook.Sheets[sheetName]
 			const data: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 })
 
-			const entries = parseSheet(data, course, defaultWeekType)
+			const entries = parseSheet(data, course, defaultWeekType, campus)
 			allEntries.push(...entries)
 		}
 
@@ -204,7 +213,7 @@ export async function POST(request: NextRequest) {
 
 			// Сохраняем расписание - просто создаем все записи
 			await prisma.schedule.createMany({
-				data: finalEntries,
+				data: finalEntries as any,
 				skipDuplicates: true,
 			})
 		}
@@ -228,6 +237,7 @@ function parseSheet(
 	data: any[][],
 	course: number,
 	defaultWeekType: string,
+	campus: string,
 ): Array<{
 	course: number
 	group: string
@@ -239,6 +249,7 @@ function parseSheet(
 	teacher: string
 	room: string | null
 	weekType: string
+	campus: string
 }> {
 	const entries: Array<{
 		course: number
@@ -251,6 +262,7 @@ function parseSheet(
 		teacher: string
 		room: string | null
 		weekType: string
+		campus: string
 	}> = []
 
 	// Находим строку с группами
@@ -419,6 +431,7 @@ function parseSheet(
 						teacher: teacher || '',
 						room: room || null,
 						weekType,
+						campus,
 					})
 				}
 			}
@@ -526,6 +539,7 @@ function parseSheet(
 				teacher: teacher || '',
 				room: room || null,
 				weekType,
+				campus,
 			})
 		}
 	}
@@ -541,6 +555,16 @@ function getTimeSlot(pairNum: number): string {
 		4: '14:40-16:15',
 	}
 	return times[pairNum] || `Пара ${pairNum}`
+}
+
+function getLunchTime(course: number): string {
+	const lunchTimes: Record<number, string> = {
+		1: '10:35-11:10',
+		2: '11:30-12:00',
+		3: '12:20-12:55',
+		4: '12:20-12:55',
+	}
+	return lunchTimes[course] || '12:20-12:55'
 }
 
 function capitalizeDay(day: string): string {

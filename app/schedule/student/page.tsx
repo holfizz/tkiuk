@@ -35,11 +35,15 @@ function StudentScheduleContent() {
 	const searchParams = useSearchParams()
 	const course = searchParams.get('course')
 	const group = searchParams.get('group')
+	const campus = searchParams.get('campus') || 'SECONDARY'
 
 	const [schedule, setSchedule] = useState<ScheduleItem[]>([])
 	const [replacements, setReplacements] = useState<Replacement[]>([])
 	const [loading, setLoading] = useState(true)
 	const [currentWeekType, setCurrentWeekType] = useState<string>('numerator')
+	const [selectedCampus, setSelectedCampus] = useState<'MAIN' | 'SECONDARY'>(
+		(campus as 'MAIN' | 'SECONDARY') || 'SECONDARY',
+	)
 
 	useEffect(() => {
 		if (course && group) {
@@ -47,7 +51,7 @@ function StudentScheduleContent() {
 			loadReplacements()
 			loadWeekSettings()
 		}
-	}, [course, group])
+	}, [course, group, selectedCampus])
 
 	const loadWeekSettings = async () => {
 		try {
@@ -63,12 +67,13 @@ function StudentScheduleContent() {
 
 	const loadSchedule = async () => {
 		setLoading(true)
-		const res = await fetch(`/api/schedule/all?course=${course}`)
-		const data = await res.json()
-		const filtered = data.schedule.filter(
-			(s: ScheduleItem) => s.groupFull === group,
+		console.log('Loading schedule for:', { course, group, selectedCampus })
+		const res = await fetch(
+			`/api/schedule/student?course=${course}&group=${group}&campus=${selectedCampus}`,
 		)
-		setSchedule(filtered)
+		const data = await res.json()
+		console.log('Received schedule:', data)
+		setSchedule(data.schedule)
 		setLoading(false)
 	}
 
@@ -157,12 +162,31 @@ function StudentScheduleContent() {
 
 	const getLunchTime = (courseNum: string) => {
 		const lunchTimes: Record<string, string> = {
-			'1': '12:20-12:55',
-			'2': '12:30-13:05',
-			'3': '12:40-13:15',
-			'4': '12:50-13:25',
+			'1': '10:35-11:10',
+			'2': '11:30-12:00',
+			'3': '12:20-12:55',
+			'4': '12:20-12:55',
 		}
 		return lunchTimes[courseNum] || '12:20-12:55'
+	}
+
+	const handleCampusChange = (newCampus: 'MAIN' | 'SECONDARY') => {
+		setSelectedCampus(newCampus)
+		localStorage.setItem('userCampus', newCampus)
+		// Перезагружаем расписание с новой площадкой
+		loadScheduleForCampus(newCampus)
+	}
+
+	const loadScheduleForCampus = async (campusToLoad: 'MAIN' | 'SECONDARY') => {
+		setLoading(true)
+		console.log('Loading schedule for campus:', { course, group, campusToLoad })
+		const res = await fetch(
+			`/api/schedule/student?course=${course}&group=${group}&campus=${campusToLoad}`,
+		)
+		const data = await res.json()
+		console.log('Received schedule for campus:', data)
+		setSchedule(data.schedule)
+		setLoading(false)
 	}
 
 	const handleReset = () => {
@@ -206,10 +230,22 @@ function StudentScheduleContent() {
 
 			<div className='page-content'>
 				<div className='modern-container'>
-					{schedule.length === 0 ? (
+					{loading ? (
+						<div className='loading'>Загрузка расписания...</div>
+					) : schedule.length === 0 ? (
 						<div className='selection-container'>
-							<p style={{ textAlign: 'center', color: '#6b7280' }}>
+							<p
+								style={{
+									textAlign: 'center',
+									color: '#f59e0b',
+									fontSize: '1.1rem',
+									marginBottom: '12px',
+								}}
+							>
 								Расписание не найдено
+							</p>
+							<p style={{ textAlign: 'center', color: '#6b7280' }}>
+								Пока что администраторы не загрузили расписание для этой группы
 							</p>
 						</div>
 					) : (

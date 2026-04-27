@@ -19,6 +19,7 @@ model Schedule {
   teacher   String
   room      String?
   weekType  String   @default("both")
+  campus    Campus   @default(MAIN)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -26,7 +27,13 @@ model Schedule {
   @@index([teacher])
   @@index([groupFull])
   @@index([weekType])
+  @@index([campus])
   @@index([course, groupFull, dayOfWeek, timeSlot, weekType])
+}
+
+enum Campus {
+  MAIN
+  SECONDARY
 }
 
 model Teacher {

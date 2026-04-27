@@ -9,6 +9,9 @@ interface HeaderProps {
 	showChangeButton?: boolean
 	onChangeClick?: () => void
 	changeButtonText?: string
+	campus?: 'MAIN' | 'SECONDARY'
+	onCampusChange?: (campus: 'MAIN' | 'SECONDARY') => void
+	showCampusSelector?: boolean
 }
 
 export default function Header({
@@ -17,6 +20,9 @@ export default function Header({
 	showChangeButton,
 	onChangeClick,
 	changeButtonText,
+	campus = 'SECONDARY',
+	onCampusChange,
+	showCampusSelector = false,
 }: HeaderProps) {
 	const router = useRouter()
 	const [showModal, setShowModal] = useState(false)
@@ -68,8 +74,9 @@ export default function Header({
 							src='/logo.svg'
 							alt='АИТУ'
 							style={{
-								width: '56px',
-								height: '56px',
+								height: '100%',
+								maxHeight: '80px',
+								width: 'auto',
 								objectFit: 'contain',
 							}}
 						/>
@@ -79,6 +86,54 @@ export default function Header({
 						</div>
 					</div>
 					<div className='header-actions'>
+						{showCampusSelector && onCampusChange && (
+							<div
+								style={{
+									display: 'flex',
+									gap: '6px',
+									background: 'white',
+									padding: '4px',
+									borderRadius: '20px',
+									border: '2px solid #e5e7eb',
+								}}
+							>
+								<button
+									onClick={() => onCampusChange('MAIN')}
+									style={{
+										padding: '8px 16px',
+										border: 'none',
+										borderRadius: '16px',
+										background: campus === 'MAIN' ? '#3b82f6' : 'transparent',
+										color: campus === 'MAIN' ? 'white' : '#6b7280',
+										fontSize: '0.85rem',
+										fontWeight: 600,
+										cursor: 'pointer',
+										transition: 'all 0.2s',
+										fontFamily: 'LT Superior, sans-serif',
+									}}
+								>
+									1 площадка
+								</button>
+								<button
+									onClick={() => onCampusChange('SECONDARY')}
+									style={{
+										padding: '8px 16px',
+										border: 'none',
+										borderRadius: '16px',
+										background:
+											campus === 'SECONDARY' ? '#3b82f6' : 'transparent',
+										color: campus === 'SECONDARY' ? 'white' : '#6b7280',
+										fontSize: '0.85rem',
+										fontWeight: 600,
+										cursor: 'pointer',
+										transition: 'all 0.2s',
+										fontFamily: 'LT Superior, sans-serif',
+									}}
+								>
+									2 площадка
+								</button>
+							</div>
+						)}
 						{showChangeButton && onChangeClick && (
 							<button className='btn-header-action' onClick={onChangeClick}>
 								<svg

@@ -28,6 +28,12 @@ export default function AdminUpload() {
 	const [schedule, setSchedule] = useState<ScheduleItem[]>([])
 	const [loading, setLoading] = useState(false)
 	const [filterCourse, setFilterCourse] = useState<string>('1')
+	const [filterCampus, setFilterCampus] = useState<'MAIN' | 'SECONDARY'>(
+		'SECONDARY',
+	)
+	const [uploadCampus, setUploadCampus] = useState<'MAIN' | 'SECONDARY'>(
+		'SECONDARY',
+	)
 	const [isEditing, setIsEditing] = useState(false)
 	const [editedSchedule, setEditedSchedule] = useState<ScheduleItem[]>([])
 	const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -72,11 +78,11 @@ export default function AdminUpload() {
 		} else if (activeTab === 'replacements' && isAuthenticated) {
 			loadReplacements()
 		}
-	}, [activeTab, filterCourse, isAuthenticated])
+	}, [activeTab, filterCourse, filterCampus, isAuthenticated])
 
 	const loadSchedule = async () => {
 		setLoading(true)
-		const url = `/api/schedule/all?course=${filterCourse}`
+		const url = `/api/schedule/all?course=${filterCourse}&campus=${filterCampus}`
 
 		const res = await fetch(url)
 		const data = await res.json()
@@ -210,6 +216,7 @@ export default function AdminUpload() {
 	const handleFileUpload = async (
 		e: React.ChangeEvent<HTMLInputElement>,
 		course: number,
+		campus: 'MAIN' | 'SECONDARY',
 	) => {
 		const file = e.target.files?.[0]
 		if (!file) return
@@ -220,6 +227,7 @@ export default function AdminUpload() {
 		const formData = new FormData()
 		formData.append('file', file)
 		formData.append('course', course.toString())
+		formData.append('campus', campus)
 
 		try {
 			const res = await fetch('/api/upload', {
@@ -230,8 +238,10 @@ export default function AdminUpload() {
 			const data = await res.json()
 
 			if (res.ok) {
+				const campusName =
+					campus === 'MAIN' ? 'первой площадки' : 'второй площадки'
 				setMessage(
-					`Успешно загружено ${data.count} записей для ${course} курса`,
+					`Успешно загружено ${data.count} записей для ${course} курса (${campusName})`,
 				)
 				if (activeTab === 'view') {
 					loadSchedule()
@@ -533,28 +543,117 @@ export default function AdminUpload() {
 									marginBottom: '24px',
 								}}
 							>
-								При загрузке нового файла старое расписание для этого курса
-								будет удалено
+								При загрузке нового файла старое расписание для этого курса и
+								площадки будет удалено
 							</p>
 
-							<div style={{ display: 'grid', gap: '16px' }}>
+							<div style={{ marginBottom: '24px', textAlign: 'center' }}>
+								<h3
+									style={{
+										fontSize: '1.1rem',
+										marginBottom: '12px',
+										color: '#374151',
+									}}
+								>
+									Выберите площадку для загрузки
+								</h3>
+								<div
+									style={{
+										display: 'flex',
+										gap: '8px',
+										justifyContent: 'center',
+										background: 'white',
+										padding: '6px',
+										borderRadius: '20px',
+										border: '2px solid #e5e7eb',
+										maxWidth: '400px',
+										margin: '0 auto',
+									}}
+								>
+									<button
+										onClick={() => setUploadCampus('MAIN')}
+										style={{
+											flex: 1,
+											padding: '12px 20px',
+											border: 'none',
+											borderRadius: '16px',
+											background:
+												uploadCampus === 'MAIN' ? '#3b82f6' : 'transparent',
+											color: uploadCampus === 'MAIN' ? 'white' : '#6b7280',
+											fontSize: '0.95rem',
+											fontWeight: 600,
+											cursor: 'pointer',
+											transition: 'all 0.2s',
+											fontFamily: 'LT Superior, sans-serif',
+										}}
+									>
+										1 площадка
+									</button>
+									<button
+										onClick={() => setUploadCampus('SECONDARY')}
+										style={{
+											flex: 1,
+											padding: '12px 20px',
+											border: 'none',
+											borderRadius: '16px',
+											background:
+												uploadCampus === 'SECONDARY'
+													? '#3b82f6'
+													: 'transparent',
+											color: uploadCampus === 'SECONDARY' ? 'white' : '#6b7280',
+											fontSize: '0.95rem',
+											fontWeight: 600,
+											cursor: 'pointer',
+											transition: 'all 0.2s',
+											fontFamily: 'LT Superior, sans-serif',
+										}}
+									>
+										2 площадка
+									</button>
+								</div>
+							</div>
+
+							<div style={{ display: 'grid', gap: '24px' }}>
 								{[1, 2, 3, 4].map(course => (
-									<div key={course} className='upload-item'>
-										<label className='upload-label'>{course} курс</label>
-										<input
-											id={`file-${course}`}
-											type='file'
-											accept='.xls,.xlsx'
-											onChange={e => handleFileUpload(e, course)}
-											disabled={uploading}
-											style={{ display: 'none' }}
-										/>
-										<label
-											htmlFor={`file-${course}`}
-											className='file-upload-btn'
+									<div
+										key={course}
+										className='upload-item'
+										style={{
+											background: 'white',
+											padding: '20px',
+											borderRadius: '12px',
+											boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+										}}
+									>
+										<h3
+											style={{
+												fontSize: '1.2rem',
+												fontWeight: 600,
+												marginBottom: '16px',
+												color: '#1a1a1a',
+											}}
 										>
-											Выбрать файл для {course} курса
-										</label>
+											{course} курс
+										</h3>
+										<div>
+											<input
+												id={`file-${course}`}
+												type='file'
+												accept='.xls,.xlsx'
+												onChange={e =>
+													handleFileUpload(e, course, uploadCampus)
+												}
+												disabled={uploading}
+												style={{ display: 'none' }}
+											/>
+											<label
+												htmlFor={`file-${course}`}
+												className='file-upload-btn'
+												style={{ width: '100%', textAlign: 'center' }}
+											>
+												Выбрать файл для {course} курса
+											</label>
+										</div>
 									</div>
 								))}
 							</div>
@@ -576,6 +675,72 @@ export default function AdminUpload() {
 
 					{activeTab === 'view' && (
 						<div className='selection-container'>
+							<div style={{ marginBottom: '20px', textAlign: 'center' }}>
+								<h3
+									style={{
+										fontSize: '1.1rem',
+										marginBottom: '12px',
+										color: '#374151',
+									}}
+								>
+									Выберите площадку
+								</h3>
+								<div
+									style={{
+										display: 'flex',
+										gap: '8px',
+										justifyContent: 'center',
+										background: 'white',
+										padding: '6px',
+										borderRadius: '20px',
+										border: '2px solid #e5e7eb',
+										maxWidth: '400px',
+										margin: '0 auto 20px',
+									}}
+								>
+									<button
+										onClick={() => setFilterCampus('MAIN')}
+										style={{
+											flex: 1,
+											padding: '12px 20px',
+											border: 'none',
+											borderRadius: '16px',
+											background:
+												filterCampus === 'MAIN' ? '#3b82f6' : 'transparent',
+											color: filterCampus === 'MAIN' ? 'white' : '#6b7280',
+											fontSize: '0.95rem',
+											fontWeight: 600,
+											cursor: 'pointer',
+											transition: 'all 0.2s',
+											fontFamily: 'LT Superior, sans-serif',
+										}}
+									>
+										1 площадка
+									</button>
+									<button
+										onClick={() => setFilterCampus('SECONDARY')}
+										style={{
+											flex: 1,
+											padding: '12px 20px',
+											border: 'none',
+											borderRadius: '16px',
+											background:
+												filterCampus === 'SECONDARY'
+													? '#3b82f6'
+													: 'transparent',
+											color: filterCampus === 'SECONDARY' ? 'white' : '#6b7280',
+											fontSize: '0.95rem',
+											fontWeight: 600,
+											cursor: 'pointer',
+											transition: 'all 0.2s',
+											fontFamily: 'LT Superior, sans-serif',
+										}}
+									>
+										2 площадка
+									</button>
+								</div>
+							</div>
+
 							<div style={{ marginBottom: '16px' }}>
 								<h3
 									style={{
@@ -610,8 +775,28 @@ export default function AdminUpload() {
 
 							<div className='admin-controls'>
 								<div
-									style={{ display: 'flex', gap: '10px', alignItems: 'center' }}
+									style={{
+										display: 'flex',
+										gap: '10px',
+										alignItems: 'center',
+										flexWrap: 'wrap',
+									}}
 								>
+									<label style={{ color: '#374151', fontWeight: 600 }}>
+										Площадка:
+									</label>
+									<select
+										value={filterCampus}
+										onChange={e =>
+											setFilterCampus(e.target.value as 'MAIN' | 'SECONDARY')
+										}
+										className='modern-select'
+										style={{ width: 'auto', minWidth: '150px' }}
+									>
+										<option value='MAIN'>Первая</option>
+										<option value='SECONDARY'>Вторая</option>
+									</select>
+
 									<label style={{ color: '#374151', fontWeight: 600 }}>
 										Курс:
 									</label>
