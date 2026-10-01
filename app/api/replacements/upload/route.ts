@@ -1,11 +1,30 @@
+import {
+	ApiError,
+	apiError,
+	audit,
+	parseCampus,
+	requireCampus,
+	requireUser,
+} from '@/lib/auth'
+import { calculateCurrentWeekType } from '@/lib/weekCalculator'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import mammoth from 'mammoth'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
 	try {
+		const user = await requireUser(request)
 		const formData = await request.formData()
 		const file = formData.get('file') as File
+		const campus = parseCampus(formData.get('campus'))
+		requireCampus(user, campus)
+		if (
+			!(file instanceof File) ||
+			!/\.docx$/i.test(file.name) ||
+			file.size > 5 * 1024 * 1024
+		)
+			throw new ApiError(400, 'Выберите DOCX-файл до 5 МБ')
 
 		if (!file) {
 			return NextResponse.json({ error: 'Файл не найден' }, { status: 400 })
@@ -36,10 +55,14 @@ export async function POST(request: NextRequest) {
 			)
 		}
 
-		console.log('Found date:', replacementDate)
+		if (
+			Number.isNaN(Date.parse(replacementDate)) ||
+			new Date(replacementDate).toISOString().slice(0, 10) !== replacementDate
+		)
+			throw new ApiError(400, 'Некорректная дата в файле')
 
 		// Парсим таблицу
-		const replacements = []
+		const replacements: Prisma.ReplacementCreateManyInput[] = []
 
 		// Извлекаем строки таблицы (используем exec вместо matchAll для совместимости)
 		const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi
@@ -86,13 +109,13 @@ export async function POST(request: NextRequest) {
 				// Формат "3,4" - разделяем по запятой
 				pairNumbers = pairNumberStr
 					.split(',')
-					.map(p => parseInt(p.trim()))
-					.filter(p => !isNaN(p))
+					.map((p) => parseInt(p.trim()))
+					.filter((p) => !isNaN(p))
 			} else if (pairNumberStr.includes('-')) {
 				// Формат "1-3" - диапазон пар
 				const [start, end] = pairNumberStr
 					.split('-')
-					.map(p => parseInt(p.trim()))
+					.map((p) => parseInt(p.trim()))
 				if (!isNaN(start) && !isNaN(end) && start <= end) {
 					for (let i = start; i <= end; i++) {
 						pairNumbers.push(i)
@@ -141,6 +164,7 @@ export async function POST(request: NextRequest) {
 					// Даже если предмет пустой, создаем замену (отмена пары)
 					replacements.push({
 						date: replacementDate,
+						campus,
 						course,
 						groupFull,
 						pairNumber,
@@ -164,67 +188,95 @@ export async function POST(request: NextRequest) {
 			)
 		}
 
-		// Получаем текущий тип недели
-		const weekSettings = await prisma.weekSettings.findFirst()
-		const currentWeekType = weekSettings?.currentWeekType || 'numerator'
-
-		// Определяем временные слоты для пар
-		const timeSlots: Record<number, string> = {
-			1: '09:00-10:35',
-			2: '10:45-12:20',
-			3: '12:55-14:30',
-			4: '14:40-16:15',
-		}
-
-		// Определяем день недели для даты замены
-		const replacementDateObj = new Date(replacementDate)
-		const dayOfWeekNum = replacementDateObj.getDay()
-		const daysOfWeek = [
-			'Воскресенье',
-			'Понедельник',
-			'Вторник',
-			'Среда',
-			'Четверг',
-			'Пятница',
-			'Суббота',
-		]
-		const dayOfWeek = daysOfWeek[dayOfWeekNum]
-
-		// Для каждой замены находим оригинальную пару из расписания
-		for (const replacement of replacements) {
-			const timeSlot = timeSlots[replacement.pairNumber]
-			if (!timeSlot) continue
-
-			// Ищем пару в расписании для текущей недели
-			const originalLesson = await prisma.schedule.findFirst({
-				where: {
-					groupFull: replacement.groupFull,
-					dayOfWeek: dayOfWeek,
-					timeSlot: timeSlot,
-					weekType: currentWeekType,
-				},
-			})
-
-			// Если нашли оригинальную пару - сохраняем её данные
-			if (originalLesson) {
-				replacement.originalSubject = originalLesson.subject
-				replacement.originalTeacher = originalLesson.teacher
-			}
-		}
-
-		for (const replacement of replacements) {
-			await prisma.replacement.upsert({
-				where: {
-					date_groupFull_pairNumber: {
-						date: replacement.date,
-						groupFull: replacement.groupFull,
-						pairNumber: replacement.pairNumber,
+		await prisma.$transaction(
+			async (tx) => {
+				await tx.$executeRaw`SELECT pg_advisory_xact_lock(20261001)`
+				const settings = await tx.weekSettings.findFirst({
+					orderBy: { id: 'asc' },
+				})
+				const currentWeekType = calculateCurrentWeekType(
+					new Date(`${replacementDate}T12:00:00Z`),
+					settings,
+				)
+				const dayOfWeek = [
+					'Воскресенье',
+					'Понедельник',
+					'Вторник',
+					'Среда',
+					'Четверг',
+					'Пятница',
+					'Суббота',
+				][new Date(`${replacementDate}T12:00:00Z`).getUTCDay()]
+				const slots = [
+					'09:00-10:35',
+					'10:45-12:20',
+					'12:55-14:30',
+					'14:40-16:15',
+				]
+				const groups = [...new Set(replacements.map((r) => r.groupFull))]
+				const lessons = await tx.schedule.findMany({
+					where: { groupFull: { in: groups }, campus },
+				})
+				const before = await tx.replacement.findMany({
+					where: { date: replacementDate, groupFull: { in: groups } },
+				})
+				for (const replacement of replacements) {
+					const group = lessons.find(
+						(l) => l.groupFull === replacement.groupFull,
+					)
+					if (!group)
+						throw new ApiError(
+							400,
+							`Группа ${replacement.groupFull} отсутствует на выбранной площадке`,
+						)
+					replacement.course = group.course
+					const conflict = before.find(
+						(r) =>
+							r.groupFull === replacement.groupFull &&
+							r.pairNumber === replacement.pairNumber,
+					)
+					if (conflict && conflict.campus !== campus)
+						throw new ApiError(
+							409,
+							'Замена уже существует на другой или неопределённой площадке',
+						)
+					const original = lessons.find(
+						(l) =>
+							l.groupFull === replacement.groupFull &&
+							l.dayOfWeek === dayOfWeek &&
+							l.timeSlot === slots[replacement.pairNumber - 1] &&
+							(l.weekType === currentWeekType || l.weekType === 'both'),
+					)
+					replacement.originalSubject = original?.subject ?? null
+					replacement.originalTeacher = original?.teacher ?? null
+					await tx.replacement.upsert({
+						where: {
+							date_groupFull_pairNumber: {
+								date: replacement.date,
+								groupFull: replacement.groupFull,
+								pairNumber: replacement.pairNumber,
+							},
+						},
+						update: replacement,
+						create: replacement,
+					})
+				}
+				await audit(
+					tx,
+					user,
+					'IMPORT',
+					'replacement',
+					{
+						file: file.name,
+						date: replacementDate,
+						before,
+						after: replacements,
 					},
-				},
-				update: replacement,
-				create: replacement,
-			})
-		}
+					campus,
+				)
+			},
+			{ timeout: 30_000 },
+		)
 
 		return NextResponse.json({
 			success: true,
@@ -233,10 +285,6 @@ export async function POST(request: NextRequest) {
 			count: replacements.length,
 		})
 	} catch (error) {
-		console.error('Upload error:', error)
-		return NextResponse.json(
-			{ error: `Ошибка при обработке файла: ${error}` },
-			{ status: 500 },
-		)
+		return apiError(error)
 	}
 }

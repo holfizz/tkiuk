@@ -4,8 +4,10 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Footer from '../components/Footer'
 import Header from '../components/Header'
+import AuditLog from '../components/AuditLog'
 
 interface ScheduleItem {
+	campus: 'MAIN' | 'SECONDARY'
 	id: number
 	course: number
 	group: string
@@ -20,10 +22,15 @@ interface ScheduleItem {
 }
 
 export default function AdminUpload() {
+	const [user, setUser] = useState<{
+		username: string
+		name: string
+		campus: 'MAIN' | 'SECONDARY' | null
+	} | null>(null)
 	const [uploading, setUploading] = useState(false)
 	const [message, setMessage] = useState('')
 	const [activeTab, setActiveTab] = useState<
-		'upload' | 'view' | 'teachers' | 'replacements'
+		'upload' | 'view' | 'teachers' | 'replacements' | 'audit'
 	>('view')
 	const [schedule, setSchedule] = useState<ScheduleItem[]>([])
 	const [loading, setLoading] = useState(false)
@@ -49,13 +56,22 @@ export default function AdminUpload() {
 	const router = useRouter()
 
 	useEffect(() => {
-		const auth = localStorage.getItem('adminAuth')
-		if (auth !== 'true') {
-			router.push('/admin/login')
-		} else {
-			setIsAuthenticated(true)
-			loadWeekSettings()
-		}
+		fetch('/api/auth/session')
+			.then(async (res) => {
+				if (!res.ok) {
+					router.replace('/admin/login')
+					return
+				}
+				const { user } = await res.json()
+				setUser(user)
+				if (user.campus) {
+					setFilterCampus(user.campus)
+					setUploadCampus(user.campus)
+				}
+				setIsAuthenticated(true)
+				loadWeekSettings()
+			})
+			.catch(() => router.replace('/admin/login'))
 	}, [router])
 
 	const loadWeekSettings = async () => {
@@ -101,7 +117,7 @@ export default function AdminUpload() {
 
 	const loadReplacements = async () => {
 		setLoading(true)
-		const res = await fetch('/api/replacements')
+		const res = await fetch(`/api/replacements?campus=${filterCampus}`)
 		const data = await res.json()
 		setReplacements(data.replacements || [])
 		setEditedReplacements(data.replacements || [])
@@ -122,7 +138,15 @@ export default function AdminUpload() {
 		try {
 			// Обновляем все измененные замены
 			for (const replacement of editedReplacements) {
-				await fetch('/api/replacements/update', {
+				const original = replacements.find((r) => r.id === replacement.id)
+				if (
+					original &&
+					original.newSubject === replacement.newSubject &&
+					original.newTeacher === replacement.newTeacher &&
+					original.room === replacement.room
+				)
+					continue
+				const res = await fetch('/api/replacements/update', {
 					method: 'PUT',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
@@ -132,6 +156,10 @@ export default function AdminUpload() {
 						room: replacement.room,
 					}),
 				})
+				if (!res.ok) {
+					const error = await res.json()
+					throw new Error(error.error || 'Не удалось сохранить замену')
+				}
 			}
 			setReplacementMessage('Все замены сохранены')
 			setIsEditingReplacements(false)
@@ -148,8 +176,8 @@ export default function AdminUpload() {
 		field: string,
 		value: string,
 	) => {
-		setEditedReplacements(prev =>
-			prev.map(r => (r.id === id ? { ...r, [field]: value } : r)),
+		setEditedReplacements((prev) =>
+			prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)),
 		)
 	}
 
@@ -164,6 +192,7 @@ export default function AdminUpload() {
 
 		const formData = new FormData()
 		formData.append('file', file)
+		formData.append('campus', filterCampus)
 
 		try {
 			const res = await fetch('/api/replacements/upload', {
@@ -191,9 +220,12 @@ export default function AdminUpload() {
 		if (!confirm(`Удалить все замены на ${date}?`)) return
 
 		try {
-			const res = await fetch(`/api/replacements?date=${date}`, {
-				method: 'DELETE',
-			})
+			const res = await fetch(
+				`/api/replacements?date=${date}&campus=${filterCampus}`,
+				{
+					method: 'DELETE',
+				},
+			)
 
 			if (res.ok) {
 				setReplacementMessage('Замены удалены')
@@ -208,9 +240,14 @@ export default function AdminUpload() {
 		}
 	}
 
-	const handleLogout = () => {
-		localStorage.removeItem('adminAuth')
-		router.push('/admin/login')
+	const handleLogout = async () => {
+		try {
+			const res = await fetch('/api/auth/logout', { method: 'POST' })
+			if (!res.ok && res.status !== 401) throw new Error('Не удалось выйти')
+			router.replace('/admin/login')
+		} catch {
+			setMessage('Не удалось выйти. Повторите попытку')
+		}
 	}
 
 	const handleFileUpload = async (
@@ -272,19 +309,20 @@ export default function AdminUpload() {
 			setMessage('Сохранение...')
 
 			// Разделяем на обновления и создания
-			const updates = editedSchedule.filter(edited => {
+			const updates = editedSchedule.filter((edited) => {
 				if (edited.id < 0) return false // Пропускаем новые записи
-				const original = schedule.find(s => s.id === edited.id)
+				const original = schedule.find((s) => s.id === edited.id)
 				return (
 					original &&
 					(original.subject !== edited.subject ||
 						original.teacher !== edited.teacher ||
-						original.room !== edited.room)
+						original.room !== edited.room ||
+						original.weekType !== edited.weekType)
 				)
 			})
 
 			const creates = editedSchedule.filter(
-				edited =>
+				(edited) =>
 					edited.id < 0 &&
 					edited.subject.trim() !== '' &&
 					edited.teacher.trim() !== '',
@@ -313,7 +351,7 @@ export default function AdminUpload() {
 				const res = await fetch('/api/schedule/update', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(itemData),
+					body: JSON.stringify({ ...itemData, campus: filterCampus }),
 				})
 
 				if (!res.ok) {
@@ -335,8 +373,8 @@ export default function AdminUpload() {
 	}
 
 	const updateCell = (id: number, field: keyof ScheduleItem, value: string) => {
-		setEditedSchedule(prev =>
-			prev.map(item => (item.id === id ? { ...item, [field]: value } : item)),
+		setEditedSchedule((prev) =>
+			prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
 		)
 	}
 
@@ -350,12 +388,12 @@ export default function AdminUpload() {
 	) => {
 		// Создаем временную запись с отрицательным ID
 		const tempId = -Date.now()
-		const groupMatch = groupFull.match(/^(\d)/)
-		const course = groupMatch ? parseInt(groupMatch[1]) : 1
+		const course = Number(filterCourse)
 
 		const newItem: ScheduleItem = {
 			id: tempId,
-			course: course >= 9 ? 1 : course,
+			course,
+			campus: filterCampus,
 			group: groupFull.split('-')[0],
 			groupFull: groupFull,
 			specialty: '',
@@ -367,7 +405,7 @@ export default function AdminUpload() {
 			weekType: weekType,
 		}
 
-		setEditedSchedule(prev => [...prev, newItem])
+		setEditedSchedule((prev) => [...prev, newItem])
 	}
 
 	const updateOrCreateCell = (
@@ -384,7 +422,7 @@ export default function AdminUpload() {
 		} else {
 			// Проверяем, есть ли уже временная запись для этой ячейки и типа недели
 			const existing = editedSchedule.find(
-				item =>
+				(item) =>
 					item.groupFull === groupFull &&
 					item.dayOfWeek === day &&
 					item.timeSlot === time &&
@@ -402,7 +440,7 @@ export default function AdminUpload() {
 		const groups: string[] = []
 		const dataSource = isEditing ? editedSchedule : schedule
 
-		dataSource.forEach(item => {
+		dataSource.forEach((item) => {
 			if (!groups.includes(item.groupFull)) {
 				groups.push(item.groupFull)
 			}
@@ -426,16 +464,16 @@ export default function AdminUpload() {
 
 		const grouped: any[] = []
 
-		days.forEach(day => {
+		days.forEach((day) => {
 			const dayRow: any = { isDay: true, day, groups: {} }
 			grouped.push(dayRow)
 
-			timeSlots.forEach(time => {
+			timeSlots.forEach((time) => {
 				const row: any = { isDay: false, day, time, groups: {} }
 
-				groups.forEach(groupName => {
+				groups.forEach((groupName) => {
 					const item = dataSource.find(
-						s =>
+						(s) =>
 							s.dayOfWeek === day &&
 							s.timeSlot === time &&
 							s.groupFull === groupName,
@@ -444,7 +482,7 @@ export default function AdminUpload() {
 				})
 
 				// В режиме редактирования показываем все строки, иначе только с данными
-				if (isEditing || Object.values(row.groups).some(v => v !== null)) {
+				if (isEditing || Object.values(row.groups).some((v) => v !== null)) {
 					grouped.push(row)
 				}
 			})
@@ -457,9 +495,9 @@ export default function AdminUpload() {
 
 	const getWeekBadge = (weekType: string) => {
 		if (weekType === 'numerator')
-			return <span className='week-badge numerator'>Ч</span>
+			return <span className="week-badge numerator">Ч</span>
 		if (weekType === 'denominator')
-			return <span className='week-badge denominator'>З</span>
+			return <span className="week-badge denominator">З</span>
 		return null
 	}
 
@@ -467,9 +505,9 @@ export default function AdminUpload() {
 		return (
 			<>
 				<Header />
-				<div className='page-content'>
-					<div className='modern-container'>
-						<div className='loading'>Проверка авторизации...</div>
+				<div className="page-content">
+					<div className="modern-container">
+						<div className="loading">Проверка авторизации...</div>
 					</div>
 				</div>
 				<Footer />
@@ -479,32 +517,46 @@ export default function AdminUpload() {
 
 	return (
 		<>
-			<Header title='Панель администратора' subtitle='Управление расписанием' />
+			<Header title="Панель администратора" subtitle="Управление расписанием" />
 
-			<div className='page-content'>
-				<div className='modern-container'>
-					<div className='admin-actions'>
-						<button className='back-link' onClick={() => router.push('/')}>
+			<div className="page-content">
+				<div className="modern-container">
+					<div className="admin-actions">
+						<button className="back-link" onClick={() => router.push('/')}>
 							<svg
-								xmlns='http://www.w3.org/2000/svg'
+								xmlns="http://www.w3.org/2000/svg"
 								width={20}
 								height={20}
-								viewBox='0 0 24 24'
+								viewBox="0 0 24 24"
 								style={{ verticalAlign: 'middle', marginRight: '6px' }}
 							>
 								<path
-									fill='currentColor'
-									d='M11.67 3.87L9.9 2.1L0 12l9.9 9.9l1.77-1.77L3.54 12z'
+									fill="currentColor"
+									d="M11.67 3.87L9.9 2.1L0 12l9.9 9.9l1.77-1.77L3.54 12z"
 								></path>
 							</svg>
 							На главную
 						</button>
-						<button className='btn-logout' onClick={handleLogout}>
+						<button className="btn-logout" onClick={handleLogout}>
 							Выйти
 						</button>
 					</div>
 
-					<div className='admin-tabs'>
+					<p>
+						{user?.name} ·{' '}
+						{user?.campus === 'MAIN'
+							? '1 площадка'
+							: user?.campus === 'SECONDARY'
+								? '2 площадка'
+								: 'Все площадки'}
+					</p>
+					<div className="admin-tabs">
+						<button
+							className={`admin-tab ${activeTab === 'audit' ? 'active' : ''}`}
+							onClick={() => setActiveTab('audit')}
+						>
+							Журнал действий
+						</button>
 						<button
 							className={`admin-tab ${activeTab === 'view' ? 'active' : ''}`}
 							onClick={() => setActiveTab('view')}
@@ -531,9 +583,11 @@ export default function AdminUpload() {
 						</button>
 					</div>
 
+					{activeTab === 'audit' && <AuditLog />}
+
 					{activeTab === 'upload' && (
-						<div className='selection-container'>
-							<h2 className='section-title' style={{ fontSize: '1.5rem' }}>
+						<div className="selection-container">
+							<h2 className="section-title" style={{ fontSize: '1.5rem' }}>
 								Загрузить расписание
 							</h2>
 							<p
@@ -571,6 +625,7 @@ export default function AdminUpload() {
 									}}
 								>
 									<button
+										disabled={Boolean(user?.campus && user.campus !== 'MAIN')}
 										onClick={() => setUploadCampus('MAIN')}
 										style={{
 											flex: 1,
@@ -590,6 +645,9 @@ export default function AdminUpload() {
 										1 площадка
 									</button>
 									<button
+										disabled={Boolean(
+											user?.campus && user.campus !== 'SECONDARY',
+										)}
 										onClick={() => setUploadCampus('SECONDARY')}
 										style={{
 											flex: 1,
@@ -614,10 +672,10 @@ export default function AdminUpload() {
 							</div>
 
 							<div style={{ display: 'grid', gap: '24px' }}>
-								{[1, 2, 3, 4].map(course => (
+								{[1, 2, 3, 4].map((course) => (
 									<div
 										key={course}
-										className='upload-item'
+										className="upload-item"
 										style={{
 											background: 'white',
 											padding: '20px',
@@ -638,9 +696,9 @@ export default function AdminUpload() {
 										<div>
 											<input
 												id={`file-${course}`}
-												type='file'
-												accept='.xls,.xlsx'
-												onChange={e =>
+												type="file"
+												accept=".xls,.xlsx"
+												onChange={(e) =>
 													handleFileUpload(e, course, uploadCampus)
 												}
 												disabled={uploading}
@@ -648,7 +706,7 @@ export default function AdminUpload() {
 											/>
 											<label
 												htmlFor={`file-${course}`}
-												className='file-upload-btn'
+												className="file-upload-btn"
 												style={{ width: '100%', textAlign: 'center' }}
 											>
 												Выбрать файл для {course} курса
@@ -674,7 +732,7 @@ export default function AdminUpload() {
 					)}
 
 					{activeTab === 'view' && (
-						<div className='selection-container'>
+						<div className="selection-container">
 							<div style={{ marginBottom: '20px', textAlign: 'center' }}>
 								<h3
 									style={{
@@ -699,6 +757,7 @@ export default function AdminUpload() {
 									}}
 								>
 									<button
+										disabled={Boolean(user?.campus && user.campus !== 'MAIN')}
 										onClick={() => setFilterCampus('MAIN')}
 										style={{
 											flex: 1,
@@ -718,6 +777,9 @@ export default function AdminUpload() {
 										1 площадка
 									</button>
 									<button
+										disabled={Boolean(
+											user?.campus && user.campus !== 'SECONDARY',
+										)}
 										onClick={() => setFilterCampus('SECONDARY')}
 										style={{
 											flex: 1,
@@ -753,27 +815,27 @@ export default function AdminUpload() {
 								>
 									Обозначения:
 								</h3>
-								<div className='admin-legend'>
-									<div className='legend-item'>
-										<div className='legend-color empty-cell'></div>
+								<div className="admin-legend">
+									<div className="legend-item">
+										<div className="legend-color empty-cell"></div>
 										<span>Нет пары</span>
 									</div>
-									<div className='legend-item'>
-										<div className='legend-color numerator-cell'></div>
+									<div className="legend-item">
+										<div className="legend-color numerator-cell"></div>
 										<span>Числитель</span>
 									</div>
-									<div className='legend-item'>
-										<div className='legend-color denominator-cell'></div>
+									<div className="legend-item">
+										<div className="legend-color denominator-cell"></div>
 										<span>Знаменатель</span>
 									</div>
-									<div className='legend-item'>
-										<div className='legend-color replacement-cell'></div>
+									<div className="legend-item">
+										<div className="legend-color replacement-cell"></div>
 										<span>Замена</span>
 									</div>
 								</div>
 							</div>
 
-							<div className='admin-controls'>
+							<div className="admin-controls">
 								<div
 									style={{
 										display: 'flex',
@@ -787,14 +849,16 @@ export default function AdminUpload() {
 									</label>
 									<select
 										value={filterCampus}
-										onChange={e =>
+										disabled={Boolean(user?.campus)}
+										aria-label="Площадка расписания"
+										onChange={(e) =>
 											setFilterCampus(e.target.value as 'MAIN' | 'SECONDARY')
 										}
-										className='modern-select'
+										className="modern-select"
 										style={{ width: 'auto', minWidth: '150px' }}
 									>
-										<option value='MAIN'>Первая</option>
-										<option value='SECONDARY'>Вторая</option>
+										<option value="MAIN">Первая</option>
+										<option value="SECONDARY">Вторая</option>
 									</select>
 
 									<label style={{ color: '#374151', fontWeight: 600 }}>
@@ -802,14 +866,15 @@ export default function AdminUpload() {
 									</label>
 									<select
 										value={filterCourse}
-										onChange={e => setFilterCourse(e.target.value)}
-										className='modern-select'
+										aria-label="Курс расписания"
+										onChange={(e) => setFilterCourse(e.target.value)}
+										className="modern-select"
 										style={{ width: 'auto', minWidth: '120px' }}
 									>
-										<option value='1'>1 курс</option>
-										<option value='2'>2 курс</option>
-										<option value='3'>3 курс</option>
-										<option value='4'>4 курс</option>
+										<option value="1">1 курс</option>
+										<option value="2">2 курс</option>
+										<option value="3">3 курс</option>
+										<option value="4">4 курс</option>
 									</select>
 								</div>
 
@@ -846,15 +911,15 @@ export default function AdminUpload() {
 									</div>
 
 									{!isEditing ? (
-										<button className='btn-edit' onClick={startEdit}>
+										<button className="btn-edit" onClick={startEdit}>
 											Редактировать
 										</button>
 									) : (
 										<>
-											<button className='btn-save' onClick={saveEdit}>
+											<button className="btn-save" onClick={saveEdit}>
 												Сохранить
 											</button>
-											<button className='btn-cancel' onClick={cancelEdit}>
+											<button className="btn-cancel" onClick={cancelEdit}>
 												Отмена
 											</button>
 										</>
@@ -863,7 +928,7 @@ export default function AdminUpload() {
 							</div>
 
 							{loading ? (
-								<div className='loading'>Загрузка...</div>
+								<div className="loading">Загрузка...</div>
 							) : schedule.length === 0 ? (
 								<p
 									style={{
@@ -875,13 +940,13 @@ export default function AdminUpload() {
 									Расписание не найдено. Загрузите файлы.
 								</p>
 							) : (
-								<div className='admin-table-wrapper'>
-									<table className='admin-table'>
+								<div className="admin-table-wrapper">
+									<table className="admin-table">
 										<thead>
 											<tr>
-												<th className='sticky-col'>Время</th>
+												<th className="sticky-col">Время</th>
 												<th style={{ width: '50px' }}></th>
-												{groups.map(group => (
+												{groups.map((group) => (
 													<th key={group}>{group}</th>
 												))}
 											</tr>
@@ -890,8 +955,8 @@ export default function AdminUpload() {
 											{data.map((row, idx) => {
 												if (row.isDay) {
 													return (
-														<tr key={`day-${idx}`} className='day-row'>
-															<td className='sticky-col'>{row.day}</td>
+														<tr key={`day-${idx}`} className="day-row">
+															<td className="sticky-col">{row.day}</td>
 															<td colSpan={1 + groups.length}></td>
 														</tr>
 													)
@@ -899,137 +964,95 @@ export default function AdminUpload() {
 
 												return (
 													<tr key={`time-${idx}`}>
-														<td className='sticky-col time-col'>{row.time}</td>
+														<td className="sticky-col time-col">{row.time}</td>
 														<td style={{ width: '50px' }}></td>
-														{groups.map(group => {
-															const item = row.groups[group]
-															const cellKey = `${row.day}-${row.time}-${group}`
-
-															// Находим записи для числителя и знаменателя
-															const dataSource = isEditing
+														{groups.map((group) => {
+															const source = isEditing
 																? editedSchedule
 																: schedule
-															const numeratorItem = dataSource.find(
-																s =>
+															const items = source.filter(
+																(s) =>
 																	s.groupFull === group &&
 																	s.dayOfWeek === row.day &&
 																	s.timeSlot === row.time &&
-																	s.weekType === 'numerator',
+																	(s.weekType === viewWeekType ||
+																		s.weekType === 'both'),
 															)
-															const denominatorItem = dataSource.find(
-																s =>
-																	s.groupFull === group &&
-																	s.dayOfWeek === row.day &&
-																	s.timeSlot === row.time &&
-																	s.weekType === 'denominator',
-															)
-
-															// Выбираем какую неделю показывать
-															const displayItem =
-																viewWeekType === 'numerator'
-																	? numeratorItem
-																	: denominatorItem
-
-															// Функция проверки пустой пары
-															const isEmptyLesson = (lesson: any) => {
-																if (!lesson) return true
-																const subject = lesson.subject?.trim() || ''
-																return subject === '' || subject === '-'
-															}
-
-															// Проверяем, пустая ли ячейка
-															const isEmptyCell = isEmptyLesson(displayItem)
-
-															// Проверяем, есть ли различия между числителем и знаменателем
-															const hasDifference =
-																numeratorItem &&
-																denominatorItem &&
-																(numeratorItem.subject !==
-																	denominatorItem.subject ||
-																	numeratorItem.teacher !==
-																		denominatorItem.teacher ||
-																	numeratorItem.room !== denominatorItem.room)
-
-															// Определяем класс для ячейки
-															let cellClass = 'schedule-cell'
-															if (isEmptyCell && !isEditing) {
-																cellClass += ' empty-schedule-cell'
-															} else if (hasDifference) {
-																// Только если есть различия - выделяем цветом
-																cellClass +=
-																	viewWeekType === 'numerator'
-																		? ' numerator-cell'
-																		: ' denominator-cell'
-															}
-
 															return (
-																<td key={group} className={cellClass}>
-																	{isEditing ? (
-																		<div className='edit-cell'>
-																			<input
-																				className='edit-input'
-																				value={displayItem?.subject || ''}
-																				onChange={e =>
-																					updateOrCreateCell(
-																						displayItem?.id || null,
-																						group,
-																						row.day,
-																						row.time,
-																						'subject',
-																						e.target.value,
-																						viewWeekType,
-																					)
-																				}
-																				placeholder='Предмет'
-																			/>
-																			<input
-																				className='edit-input'
-																				value={displayItem?.teacher || ''}
-																				onChange={e =>
-																					updateOrCreateCell(
-																						displayItem?.id || null,
-																						group,
-																						row.day,
-																						row.time,
-																						'teacher',
-																						e.target.value,
-																						viewWeekType,
-																					)
-																				}
-																				placeholder='Преподаватель'
-																			/>
-																			<input
-																				className='edit-input'
-																				value={displayItem?.room || ''}
-																				onChange={e =>
-																					updateOrCreateCell(
-																						displayItem?.id || null,
-																						group,
-																						row.day,
-																						row.time,
-																						'room',
-																						e.target.value,
-																						viewWeekType,
-																					)
-																				}
-																				placeholder='Кабинет'
-																			/>
-																		</div>
-																	) : displayItem ? (
-																		<div className='view-cell'>
-																			<div className='cell-subject'>
-																				{displayItem.subject}
-																			</div>
-																			<div className='cell-teacher'>
-																				{displayItem.teacher}
-																			</div>
-																			<div className='cell-room'>
-																				Каб. {displayItem.room || '-'}
-																			</div>
-																		</div>
-																	) : (
-																		'-'
-																	)}
+																<td
+																	key={group}
+																	className={`schedule-cell ${!items.length && !isEditing ? 'empty-schedule-cell' : ''}`}
+																>
+																	{isEditing
+																		? (items.length ? items : [null]).map(
+																				(item, index) => (
+																					<div
+																						className="edit-cell"
+																						key={item?.id ?? 'new'}
+																					>
+																						{items.length > 1 && (
+																							<small>
+																								Подгруппа {index + 1}
+																							</small>
+																						)}
+																						{item?.weekType === 'both' && (
+																							<small>Обе недели</small>
+																						)}
+																						{(
+																							[
+																								'subject',
+																								'teacher',
+																								'room',
+																							] as const
+																						).map((field) => {
+																							const label =
+																								field === 'subject'
+																									? 'Предмет'
+																									: field === 'teacher'
+																										? 'Преподаватель'
+																										: 'Кабинет'
+																							return (
+																								<input
+																									key={field}
+																									className="edit-input"
+																									value={item?.[field] || ''}
+																									aria-label={`${group}, ${row.day}, ${row.time}, ${label}, подгруппа ${index + 1}`}
+																									placeholder={label}
+																									onChange={(e) =>
+																										updateOrCreateCell(
+																											item?.id ?? null,
+																											group,
+																											row.day,
+																											row.time,
+																											field,
+																											e.target.value,
+																											viewWeekType,
+																										)
+																									}
+																								/>
+																							)
+																						})}
+																					</div>
+																				),
+																			)
+																		: items.length
+																			? items.map((item) => (
+																					<div
+																						className="view-cell"
+																						key={item.id}
+																					>
+																						<div className="cell-subject">
+																							{item.subject}
+																						</div>
+																						<div className="cell-teacher">
+																							{item.teacher}
+																						</div>
+																						<div className="cell-room">
+																							Каб. {item.room || '-'}
+																						</div>
+																					</div>
+																				))
+																			: '-'}
 																</td>
 															)
 														})}
@@ -1058,8 +1081,24 @@ export default function AdminUpload() {
 					)}
 
 					{activeTab === 'replacements' && (
-						<div className='selection-container'>
-							<h2 className='section-title' style={{ fontSize: '1.5rem' }}>
+						<div className="selection-container">
+							<label>
+								Площадка замен:{' '}
+								<select
+									aria-label="Площадка замен"
+									value={filterCampus}
+									disabled={Boolean(user?.campus)}
+									onChange={(e) => {
+										setFilterCampus(e.target.value as 'MAIN' | 'SECONDARY')
+										setIsEditingReplacements(false)
+									}}
+								>
+									<option value="MAIN">1 площадка</option>
+									<option value="SECONDARY">2 площадка</option>
+								</select>
+							</label>
+
+							<h2 className="section-title" style={{ fontSize: '1.5rem' }}>
 								Замены
 							</h2>
 							<p
@@ -1074,8 +1113,8 @@ export default function AdminUpload() {
 
 							<div style={{ marginBottom: '24px' }}>
 								<label
-									htmlFor='replacement-upload'
-									className='file-upload-btn'
+									htmlFor="replacement-upload"
+									className="file-upload-btn"
 									style={{
 										display: 'inline-block',
 										cursor: uploading ? 'not-allowed' : 'pointer',
@@ -1085,9 +1124,9 @@ export default function AdminUpload() {
 									{uploading ? 'Загрузка...' : 'Выбрать файл замен (DOCX)'}
 								</label>
 								<input
-									id='replacement-upload'
-									type='file'
-									accept='.docx'
+									id="replacement-upload"
+									type="file"
+									accept=".docx"
 									onChange={handleReplacementUpload}
 									disabled={uploading}
 									style={{ display: 'none' }}
@@ -1108,7 +1147,7 @@ export default function AdminUpload() {
 							)}
 
 							{loading ? (
-								<div className='loading'>Загрузка...</div>
+								<div className="loading">Загрузка...</div>
 							) : replacements.length === 0 ? (
 								<p
 									style={{
@@ -1139,7 +1178,7 @@ export default function AdminUpload() {
 										</h3>
 										{!isEditingReplacements ? (
 											<button
-												className='btn-edit'
+												className="btn-edit"
 												onClick={handleEditReplacements}
 											>
 												Редактировать
@@ -1147,13 +1186,13 @@ export default function AdminUpload() {
 										) : (
 											<div style={{ display: 'flex', gap: '8px' }}>
 												<button
-													className='btn-save'
+													className="btn-save"
 													onClick={handleSaveReplacements}
 												>
 													Сохранить
 												</button>
 												<button
-													className='btn-cancel'
+													className="btn-cancel"
 													onClick={handleCancelEditReplacements}
 												>
 													Отмена
@@ -1199,15 +1238,15 @@ export default function AdminUpload() {
 													})}
 												</h4>
 												<button
-													className='btn-danger btn-small'
+													className="btn-danger btn-small"
 													onClick={() => handleDeleteReplacements(date)}
 													disabled={isEditingReplacements}
 												>
 													Удалить все
 												</button>
 											</div>
-											<div className='admin-table-wrapper'>
-												<table className='admin-table'>
+											<div className="admin-table-wrapper">
+												<table className="admin-table">
 													<thead>
 														<tr>
 															<th>Группа</th>
@@ -1225,16 +1264,16 @@ export default function AdminUpload() {
 																<td>
 																	{isEditingReplacements ? (
 																		<input
-																			type='text'
+																			type="text"
 																			value={r.newSubject}
-																			onChange={e =>
+																			onChange={(e) =>
 																				handleReplacementChange(
 																					r.id,
 																					'newSubject',
 																					e.target.value,
 																				)
 																			}
-																			className='edit-input'
+																			className="edit-input"
 																		/>
 																	) : (
 																		r.newSubject
@@ -1243,16 +1282,16 @@ export default function AdminUpload() {
 																<td>
 																	{isEditingReplacements ? (
 																		<input
-																			type='text'
+																			type="text"
 																			value={r.newTeacher}
-																			onChange={e =>
+																			onChange={(e) =>
 																				handleReplacementChange(
 																					r.id,
 																					'newTeacher',
 																					e.target.value,
 																				)
 																			}
-																			className='edit-input'
+																			className="edit-input"
 																		/>
 																	) : (
 																		r.newTeacher
@@ -1261,16 +1300,16 @@ export default function AdminUpload() {
 																<td>
 																	{isEditingReplacements ? (
 																		<input
-																			type='text'
+																			type="text"
 																			value={r.room || ''}
-																			onChange={e =>
+																			onChange={(e) =>
 																				handleReplacementChange(
 																					r.id,
 																					'room',
 																					e.target.value,
 																				)
 																			}
-																			className='edit-input'
+																			className="edit-input"
 																		/>
 																	) : (
 																		r.room || '-'
@@ -1289,8 +1328,8 @@ export default function AdminUpload() {
 					)}
 
 					{activeTab === 'teachers' && (
-						<div className='selection-container'>
-							<h2 className='section-title' style={{ fontSize: '1.5rem' }}>
+						<div className="selection-container">
+							<h2 className="section-title" style={{ fontSize: '1.5rem' }}>
 								Список преподавателей
 							</h2>
 							<p
@@ -1304,7 +1343,7 @@ export default function AdminUpload() {
 							</p>
 
 							{loading ? (
-								<div className='loading'>Загрузка...</div>
+								<div className="loading">Загрузка...</div>
 							) : teachers.length === 0 ? (
 								<p
 									style={{
@@ -1316,9 +1355,9 @@ export default function AdminUpload() {
 									Преподаватели не найдены. Загрузите файлы расписания.
 								</p>
 							) : (
-								<div className='teacher-grid'>
-									{teachers.map(teacher => (
-										<div key={teacher} className='teacher-card-admin'>
+								<div className="teacher-grid">
+									{teachers.map((teacher) => (
+										<div key={teacher} className="teacher-card-admin">
 											{teacher}
 										</div>
 									))}

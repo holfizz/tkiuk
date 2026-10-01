@@ -1,26 +1,32 @@
 {
-	"name": "tkuik-schedule",
-	"version": "0.1.0",
-	"private": true,
-	"scripts": {
-		"dev": "next dev",
-		"build": "next build",
-		"start": "next start",
-		"postinstall": "prisma generate"
-	},
-	"dependencies": {
-		"@prisma/client": "^5.7.0",
-		"mammoth": "^1.11.0",
-		"next": "16.0.10",
-		"react": "^19.0.0",
-		"react-dom": "^19.0.0",
-		"xlsx": "^0.18.5"
-	},
-	"devDependencies": {
-		"@types/node": "^20.0.0",
-		"@types/react": "^19.0.0",
-		"@types/react-dom": "^19.0.0",
-		"prisma": "^5.7.0",
-		"typescript": "^5.3.0"
-	}
+  "name": "aitu-schedule",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3002",
+    "build": "next build",
+    "start": "next start",
+    "postinstall": "prisma generate",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "db:migrate": "prisma migrate deploy",
+    "accounts:setup": "tsx scripts/setup-accounts.ts",
+    "schedules:import": "tsx scripts/import-schedules.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.0",
+    "mammoth": "^1.11.0",
+    "next": "^16.3.8",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "prisma": "^5.7.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.3.0"
+  }
 }

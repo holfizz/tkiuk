@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
@@ -57,10 +58,16 @@ export default function Header({
 
 	return (
 		<>
-			<div className='header-wrapper'>
-				<div className='header-container'>
+			<div className="header-wrapper">
+				<div className="header-container">
 					<div
-						className='header-content'
+						className="header-content"
+						role="link"
+						tabIndex={0}
+						aria-label="На главную"
+						onKeyDown={(e) => {
+							if (e.key === 'Enter') handleLogoClick()
+						}}
 						onClick={handleLogoClick}
 						style={{
 							cursor: 'pointer',
@@ -70,13 +77,19 @@ export default function Header({
 							gap: '16px',
 						}}
 					>
-						<img
-							src='/logo.svg'
-							alt='АИТУ'
+						<Image
+							src="/logo_circular-cropped.png"
+							width={80}
+							height={80}
+							loading="eager"
+							alt="АИТУ"
 							style={{
-								height: '100%',
+								height: '80px',
+								background: 'white',
+								borderRadius: '50%',
+								flexShrink: 0,
 								maxHeight: '80px',
-								width: 'auto',
+								width: '80px',
 								objectFit: 'contain',
 							}}
 						/>
@@ -85,7 +98,7 @@ export default function Header({
 							{subtitle && <p>{subtitle}</p>}
 						</div>
 					</div>
-					<div className='header-actions'>
+					<div className="header-actions">
 						{showCampusSelector && onCampusChange && (
 							<div
 								style={{
@@ -135,37 +148,37 @@ export default function Header({
 							</div>
 						)}
 						{showChangeButton && onChangeClick && (
-							<button className='btn-header-action' onClick={onChangeClick}>
+							<button className="btn-header-action" onClick={onChangeClick}>
 								<svg
-									xmlns='http://www.w3.org/2000/svg'
+									xmlns="http://www.w3.org/2000/svg"
 									width={18}
 									height={18}
-									viewBox='0 0 24 24'
+									viewBox="0 0 24 24"
 									style={{ verticalAlign: 'middle', marginRight: '6px' }}
 								>
-									<rect width='24' height='24' fill='none' />
+									<rect width="24" height="24" fill="none" />
 									<path
-										fill='currentColor'
-										d='M14.293 2.293a1 1 0 0 1 1.414 0l4 4a1 1 0 0 1 0 1.414l-4 4a1 1 0 0 1-1.414-1.414L16.586 8H5a1 1 0 0 1 0-2h11.586l-2.293-2.293a1 1 0 0 1 0-1.414m-4.586 10a1 1 0 0 1 0 1.414L7.414 16H19a1 1 0 1 1 0 2H7.414l2.293 2.293a1 1 0 0 1-1.414 1.414l-4-4a1 1 0 0 1 0-1.414l4-4a1 1 0 0 1 1.414 0'
+										fill="currentColor"
+										d="M14.293 2.293a1 1 0 0 1 1.414 0l4 4a1 1 0 0 1 0 1.414l-4 4a1 1 0 0 1-1.414-1.414L16.586 8H5a1 1 0 0 1 0-2h11.586l-2.293-2.293a1 1 0 0 1 0-1.414m-4.586 10a1 1 0 0 1 0 1.414L7.414 16H19a1 1 0 1 1 0 2H7.414l2.293 2.293a1 1 0 0 1-1.414 1.414l-4-4a1 1 0 0 1 0-1.414l4-4a1 1 0 0 1 1.414 0"
 									/>
 								</svg>
 								{changeButtonText || 'Сменить'}
 							</button>
 						)}
 						<button
-							className='btn-header-admin'
+							className="btn-header-admin"
 							onClick={() => router.push('/admin/login')}
-							title='Вход для администратора'
+							title="Вход для администратора"
 						>
 							<svg
-								xmlns='http://www.w3.org/2000/svg'
+								xmlns="http://www.w3.org/2000/svg"
 								width={20}
 								height={20}
-								viewBox='0 0 24 24'
+								viewBox="0 0 24 24"
 							>
 								<path
-									fill='currentColor'
-									d='M12 14v2a6 6 0 0 0-6 6H4a8 8 0 0 1 8-8m0-1c-3.315 0-6-2.685-6-6s2.685-6 6-6s6 2.685 6 6s-2.685 6-6 6m0-2c2.21 0 4-1.79 4-4s-1.79-4-4-4s-4 1.79-4 4s1.79 4 4 4m9 6h1v5h-8v-5h1v-1a3 3 0 1 1 6 0zm-2 0v-1a1 1 0 1 0-2 0v1z'
+									fill="currentColor"
+									d="M12 14v2a6 6 0 0 0-6 6H4a8 8 0 0 1 8-8m0-1c-3.315 0-6-2.685-6-6s2.685-6 6-6s6 2.685 6 6s-2.685 6-6 6m0-2c2.21 0 4-1.79 4-4s-1.79-4-4-4s-4 1.79-4 4s1.79 4 4 4m9 6h1v5h-8v-5h1v-1a3 3 0 1 1 6 0zm-2 0v-1a1 1 0 1 0-2 0v1z"
 								/>
 							</svg>
 						</button>

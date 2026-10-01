@@ -1,22 +1,35 @@
-import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
-
+import { prisma } from '@/lib/prisma'
+import {
+	ApiError,
+	apiError,
+	audit,
+	parseId,
+	requireCampus,
+	requireUser,
+} from '@/lib/auth'
 export async function DELETE(request: NextRequest) {
 	try {
-		const searchParams = request.nextUrl.searchParams
-		const id = searchParams.get('id')
-
-		if (!id) {
-			return NextResponse.json({ error: 'ID не указан' }, { status: 400 })
-		}
-
-		await prisma.schedule.delete({
-			where: { id: parseInt(id) },
+		const user = await requireUser(request)
+		const id = parseId(request.nextUrl.searchParams.get('id'))
+		await prisma.$transaction(async (tx) => {
+			await tx.$executeRaw`SELECT pg_advisory_xact_lock(20261001)`
+			const before = await tx.schedule.findUnique({ where: { id } })
+			if (!before) throw new ApiError(404, 'Пара не найдена')
+			requireCampus(user, before.campus)
+			await tx.schedule.delete({ where: { id } })
+			await audit(
+				tx,
+				user,
+				'DELETE',
+				'schedule',
+				{ before },
+				before.campus,
+				String(id),
+			)
 		})
-
 		return NextResponse.json({ success: true })
 	} catch (error) {
-		console.error('Delete error:', error)
-		return NextResponse.json({ error: 'Ошибка при удалении' }, { status: 500 })
+		return apiError(error)
 	}
 }

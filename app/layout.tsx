@@ -2,33 +2,34 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-	title:
-		'Расписание АИТУ (ТКУИК) - Академия инженерных технологий и управления',
+	metadataBase: new URL('https://schedule-aitu.ru'),
+	icons: {
+		icon: { url: '/logo_circular-cropped.png', type: 'image/png' },
+		apple: '/logo_circular-cropped.png',
+	},
+	title: 'Расписание АИТУ - Академия инженерных технологий и управления',
 	description:
-		'Актуальное расписание занятий АИТУ (Академия инженерных технологий и управления), бывший ТКУИК (Технический колледж управления и коммерции). Расписание для студентов и преподавателей всех курсов.',
+		'Актуальное расписание занятий АИТУ — Академии инженерных технологий и управления. Расписание для студентов и преподавателей всех курсов.',
 	keywords: [
 		'АИТУ',
 		'Академия инженерных технологий и управления',
-		'ТКУИК',
-		'Технический колледж управления и коммерции',
 		'расписание АИТУ',
-		'расписание ТКУИК',
 		'расписание занятий',
 		'расписание студентов',
 		'расписание преподавателей',
 		'АИТУ Санкт-Петербург',
-		'ТКУИК СПб',
 		'колледж расписание',
 		'академия расписание',
 	],
 	authors: [{ name: 'АИТУ' }],
 	openGraph: {
-		title: 'Расписание АИТУ (ТКУИК)',
+		title: 'Расписание АИТУ',
 		description:
 			'Актуальное расписание занятий Академии инженерных технологий и управления',
 		type: 'website',
 		locale: 'ru_RU',
 		siteName: 'Расписание АИТУ',
+		images: [{ url: '/logo_circular-cropped.png', alt: 'АИТУ' }],
 	},
 	robots: {
 		index: true,
@@ -52,10 +53,9 @@ export default function RootLayout({
 		'@context': 'https://schema.org',
 		'@type': 'EducationalOrganization',
 		name: 'АИТУ - Академия инженерных технологий и управления',
-		alternateName: ['ТКУИК', 'Технический колледж управления и коммерции'],
 		url: 'https://schedule-aitu.ru',
 		description:
-			'Расписание занятий Академии инженерных технологий и управления (бывший ТКУИК)',
+			'Расписание занятий Академии инженерных технологий и управления',
 		address: {
 			'@type': 'PostalAddress',
 			addressLocality: 'Санкт-Петербург',
@@ -64,35 +64,16 @@ export default function RootLayout({
 	}
 
 	return (
-		<html lang='ru'>
+		<html lang="ru">
 			<head>
-				<meta name='viewport' content='width=device-width, initial-scale=1' />
-				<meta name='theme-color' content='#3b82f6' />
-				<link rel='canonical' href='https://schedule-aitu.ru' />
+				<meta name="viewport" content="width=device-width, initial-scale=1" />
+				<meta name="theme-color" content="#3b82f6" />
+				<link rel="canonical" href="https://schedule-aitu.ru" />
 
-				{/* Favicon */}
-				<link rel='icon' type='image/x-icon' href='/favicon.ico' />
-				<link
-					rel='icon'
-					type='image/png'
-					sizes='16x16'
-					href='/favicon-16x16.png'
-				/>
-				<link
-					rel='icon'
-					type='image/png'
-					sizes='32x32'
-					href='/favicon-32x32.png'
-				/>
-				<link
-					rel='apple-touch-icon'
-					sizes='180x180'
-					href='/apple-touch-icon.png'
-				/>
-				<link rel='manifest' href='/site.webmanifest' />
+				<link rel="manifest" href="/site.webmanifest" />
 
 				<script
-					type='application/ld+json'
+					type="application/ld+json"
 					dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
 				/>
 			</head>

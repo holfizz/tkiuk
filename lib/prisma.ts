@@ -10,12 +10,4 @@ export const prisma =
 		log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
 	})
 
-// Graceful shutdown
-if (process.env.NODE_ENV !== 'production') {
-	globalForPrisma.prisma = prisma
-
-	// Handle process termination
-	process.on('beforeExit', async () => {
-		await prisma.$disconnect()
-	})
-}
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma

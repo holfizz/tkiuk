@@ -1,56 +1,56 @@
-/**
- * Вычисляет тип текущей недели (числитель/знаменатель) на основе учебного года
- * Учебный год в России начинается 1 сентября
- */
-export function calculateCurrentWeekType(): 'numerator' | 'denominator' {
-	const now = new Date()
-	const currentYear = now.getFullYear()
-	const currentMonth = now.getMonth() + 1 // 1-12
-
-	// Определяем начало учебного года
-	// Если сейчас сентябрь-декабрь, то учебный год начался в этом году
-	// Если январь-август, то учебный год начался в прошлом году
-	const academicYearStart =
-		currentMonth >= 9
-			? new Date(currentYear, 8, 1) // 1 сентября текущего года
-			: new Date(currentYear - 1, 8, 1) // 1 сентября прошлого года
-
-	// Вычисляем количество миллисекунд с начала учебного года
-	const diffTime = now.getTime() - academicYearStart.getTime()
-
-	// Переводим в дни
-	const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-
-	// Вычисляем номер недели (начиная с 1)
-	const weekNumber = Math.floor(diffDays / 7) + 1
-
-	// Четные недели - знаменатель, нечетные - числитель
-	// Первая неделя (1 сентября) - числитель
-	return weekNumber % 2 === 1 ? 'numerator' : 'denominator'
+const DAY = 86_400_000
+function moscowDate(date: Date) {
+	const parts = new Intl.DateTimeFormat('en-CA', {
+		timeZone: 'Europe/Moscow',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+	}).formatToParts(date)
+	const get = (type: string) =>
+		Number(parts.find((p) => p.type === type)!.value)
+	return new Date(Date.UTC(get('year'), get('month') - 1, get('day')))
 }
-
-/**
- * Получает дату начала текущего учебного года
- */
-export function getAcademicYearStart(): Date {
-	const now = new Date()
-	const currentYear = now.getFullYear()
-	const currentMonth = now.getMonth() + 1
-
-	return currentMonth >= 9
-		? new Date(currentYear, 8, 1)
-		: new Date(currentYear - 1, 8, 1)
+function monday(date: Date) {
+	return date.getTime() - ((date.getUTCDay() + 6) % 7) * DAY
 }
-
-/**
- * Получает номер текущей учебной недели
- */
-export function getCurrentWeekNumber(): number {
-	const now = new Date()
-	const academicYearStart = getAcademicYearStart()
-
-	const diffTime = now.getTime() - academicYearStart.getTime()
-	const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-
-	return Math.floor(diffDays / 7) + 1
+export function getAcademicYearStart(date = new Date()): Date {
+	const day = moscowDate(date)
+	return new Date(
+		Date.UTC(day.getUTCFullYear() - (day.getUTCMonth() < 8 ? 1 : 0), 8, 1),
+	)
+}
+export function getCurrentWeekNumber(date = new Date()): number {
+	return (
+		Math.floor(
+			(monday(moscowDate(date)) - monday(getAcademicYearStart(date))) /
+				(7 * DAY),
+		) + 1
+	)
+}
+export function calculateCurrentWeekType(
+	date = new Date(),
+	settings?: {
+		currentWeekType: string
+		startDate: string | null
+		manualOverride?: boolean
+	} | null,
+): 'numerator' | 'denominator' {
+	if (
+		settings?.manualOverride &&
+		settings.startDate &&
+		!Number.isNaN(Date.parse(settings.startDate)) &&
+		['numerator', 'denominator'].includes(settings.currentWeekType)
+	) {
+		const weeks = Math.floor(
+			(monday(moscowDate(date)) -
+				monday(new Date(`${settings.startDate}T00:00:00Z`))) /
+				(7 * DAY),
+		)
+		const initial = settings.currentWeekType === 'numerator'
+		return (weeks % 2 === 0 ? initial : !initial) ? 'numerator' : 'denominator'
+	}
+	return getCurrentWeekNumber(date) % 2 === 1 ? 'numerator' : 'denominator'
+}
+export function moscowDayString(date = new Date()) {
+	return moscowDate(date).toISOString().slice(0, 10)
 }

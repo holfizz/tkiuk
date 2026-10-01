@@ -1,5 +1,7 @@
 'use client'
 
+import ComputerClassesLink from '../../components/ComputerClassesLink'
+
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState } from 'react'
 import Footer from '../../components/Footer'
@@ -856,6 +858,7 @@ function TeacherScheduleContent() {
 								>
 									Заказать справку
 								</a>
+								<ComputerClassesLink />
 							</div>
 						</div>
 					</div>

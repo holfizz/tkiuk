@@ -44,6 +44,7 @@ model Teacher {
 }
 
 model Replacement {
+  campus          Campus?
   id              Int      @id @default(autoincrement())
   date            String
   course          Int
@@ -60,13 +61,52 @@ model Replacement {
 
   @@unique([date, groupFull, pairNumber])
   @@index([date])
+  @@index([campus, date])
   @@index([groupFull])
   @@index([course])
 }
 
 model WeekSettings {
+  manualOverride  Boolean  @default(false)
   id              Int      @id @default(autoincrement())
   currentWeekType String   @default("numerator")
   startDate       String?
   updatedAt       DateTime @updatedAt
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  name         String
+  passwordHash String
+  campus       Campus?
+  active       Boolean   @default(true)
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  createdAt    DateTime  @default(now())
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  username  String
+  action    String
+  entity    String
+  entityId  String?
+  campus    Campus?
+  details   Json
+  createdAt DateTime @default(now())
+  @@index([createdAt, id])
+  @@index([campus, createdAt])
 }

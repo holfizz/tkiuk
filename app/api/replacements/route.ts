@@ -1,100 +1,51 @@
-import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
-
-// Helper function to retry database operations
-async function retryOperation<T>(
-	operation: () => Promise<T>,
-	maxRetries = 3,
-): Promise<T> {
-	let lastError: any
-
-	for (let i = 0; i < maxRetries; i++) {
-		try {
-			return await operation()
-		} catch (error: any) {
-			lastError = error
-			console.warn(
-				`Database operation failed (attempt ${i + 1}/${maxRetries}):`,
-				error.message,
-			)
-
-			// If it's a connection error, wait before retrying
-			if (error.code === 'P1017' || error.message?.includes('connection')) {
-				await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)))
-			} else {
-				// For other errors, don't retry
-				throw error
-			}
-		}
-	}
-
-	throw lastError
-}
-
+import { prisma } from '@/lib/prisma'
+import {
+	ApiError,
+	apiError,
+	audit,
+	parseCampus,
+	requireCampus,
+	requireUser,
+} from '@/lib/auth'
 export async function GET(request: NextRequest) {
-	const { searchParams } = new URL(request.url)
-	const date = searchParams.get('date')
-	const groupFull = searchParams.get('group')
-
 	try {
-		const replacements = await retryOperation(async () => {
-			const where: any = {}
-
-			if (date) {
-				where.date = date
-			}
-
-			if (groupFull) {
-				where.groupFull = groupFull
-			}
-
-			return await prisma.replacement.findMany({
-				where,
-				orderBy: [
-					{ date: 'desc' },
-					{ groupFull: 'asc' },
-					{ pairNumber: 'asc' },
-				],
-			})
+		const params = request.nextUrl.searchParams
+		const date = params.get('date')
+		const groupFull = params.get('group')
+		const campus = params.get('campus')
+			? parseCampus(params.get('campus'))
+			: undefined
+		const replacements = await prisma.replacement.findMany({
+			where: {
+				...(date ? { date } : {}),
+				...(groupFull ? { groupFull } : {}),
+				...(campus ? { campus } : {}),
+			},
+			orderBy: [{ date: 'desc' }, { groupFull: 'asc' }, { pairNumber: 'asc' }],
 		})
-
 		return NextResponse.json({ replacements })
-	} catch (error: any) {
-		console.error('Error fetching replacements:', error)
-
-		// Return empty array if database is unavailable
-		if (error.code === 'P1017' || error.message?.includes('connection')) {
-			return NextResponse.json({ replacements: [] })
-		}
-
-		return NextResponse.json(
-			{ error: 'Ошибка при получении замен' },
-			{ status: 500 },
-		)
+	} catch (error) {
+		return apiError(error)
 	}
 }
-
 export async function DELETE(request: NextRequest) {
-	const { searchParams } = new URL(request.url)
-	const date = searchParams.get('date')
-
-	if (!date) {
-		return NextResponse.json({ error: 'Не указана дата' }, { status: 400 })
-	}
-
 	try {
-		await retryOperation(async () => {
-			return await prisma.replacement.deleteMany({
-				where: { date },
-			})
+		const user = await requireUser(request)
+		const params = request.nextUrl.searchParams
+		const date = params.get('date')
+		const campus = parseCampus(params.get('campus'))
+		requireCampus(user, campus)
+		if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+			throw new ApiError(400, 'Укажите дату')
+		await prisma.$transaction(async (tx) => {
+			await tx.$executeRaw`SELECT pg_advisory_xact_lock(20261001)`
+			const before = await tx.replacement.findMany({ where: { date, campus } })
+			await tx.replacement.deleteMany({ where: { date, campus } })
+			await audit(tx, user, 'DELETE', 'replacement', { date, before }, campus)
 		})
-
 		return NextResponse.json({ success: true })
-	} catch (error: any) {
-		console.error('Error deleting replacements:', error)
-		return NextResponse.json(
-			{ error: 'Ошибка при удалении замен' },
-			{ status: 500 },
-		)
+	} catch (error) {
+		return apiError(error)
 	}
 }

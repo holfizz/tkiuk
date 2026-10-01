@@ -1,5 +1,7 @@
 'use client'
 
+import ComputerClassesLink from './components/ComputerClassesLink'
+
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Footer from './components/Footer'
@@ -238,6 +240,7 @@ export default function Home() {
 									>
 										Заказать справку
 									</a>
+									<ComputerClassesLink />
 								</div>
 							</div>
 						</>

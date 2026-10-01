@@ -1,5 +1,9 @@
 'use client'
 
+import ComputerClassesLink from '../../components/ComputerClassesLink'
+
+import { combineLessons } from '@/lib/lessonDisplay'
+
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState } from 'react'
 import Footer from '../../components/Footer'
@@ -67,19 +71,17 @@ function StudentScheduleContent() {
 
 	const loadSchedule = async () => {
 		setLoading(true)
-		console.log('Loading schedule for:', { course, group, selectedCampus })
 		const res = await fetch(
-			`/api/schedule/student?course=${course}&group=${group}&campus=${selectedCampus}`,
+			`/api/schedule/student?course=${course}&group=${encodeURIComponent(group || '')}&campus=${selectedCampus}`,
 		)
 		const data = await res.json()
-		console.log('Received schedule:', data)
 		setSchedule(data.schedule)
 		setLoading(false)
 	}
 
 	const loadReplacements = async () => {
 		// Загружаем замены для этой группы
-		const res = await fetch(`/api/replacements?group=${group}`)
+		const res = await fetch(`/api/replacements?group=${encodeURIComponent(group || '')}&campus=${selectedCampus}`)
 		const data = await res.json()
 		setReplacements(data.replacements || [])
 	}
@@ -103,22 +105,22 @@ function StudentScheduleContent() {
 		return days.map(day => {
 			const daySchedule = timeSlots.map((time, index) => {
 				// Находим обе версии (числитель и знаменатель)
-				const numeratorItem = schedule.find(
+				const numeratorItem = combineLessons(schedule.filter(
 					s =>
 						s.dayOfWeek === day &&
 						s.timeSlot === time &&
 						s.weekType === 'numerator',
-				)
-				const denominatorItem = schedule.find(
+				))
+				const denominatorItem = combineLessons(schedule.filter(
 					s =>
 						s.dayOfWeek === day &&
 						s.timeSlot === time &&
 						s.weekType === 'denominator',
-				)
-				const bothItem = schedule.find(
+				))
+				const bothItem = combineLessons(schedule.filter(
 					s =>
 						s.dayOfWeek === day && s.timeSlot === time && s.weekType === 'both',
-				)
+				))
 
 				return {
 					pairNumber: index + 1,
@@ -179,12 +181,10 @@ function StudentScheduleContent() {
 
 	const loadScheduleForCampus = async (campusToLoad: 'MAIN' | 'SECONDARY') => {
 		setLoading(true)
-		console.log('Loading schedule for campus:', { course, group, campusToLoad })
 		const res = await fetch(
-			`/api/schedule/student?course=${course}&group=${group}&campus=${campusToLoad}`,
+			`/api/schedule/student?course=${course}&group=${encodeURIComponent(group || '')}&campus=${campusToLoad}`,
 		)
 		const data = await res.json()
-		console.log('Received schedule for campus:', data)
 		setSchedule(data.schedule)
 		setLoading(false)
 	}
@@ -819,6 +819,7 @@ function StudentScheduleContent() {
 								>
 									Заказать справку
 								</a>
+								<ComputerClassesLink />
 							</div>
 						</div>
 					</div>

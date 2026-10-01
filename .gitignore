@@ -10,3 +10,10 @@ dist
 *.db
 *.db-journal
 prisma/dev.db
+.env.*
+!.env.example
+.vercel/
+.local/
+test-results/
+
+*.tsbuildinfo
