@@ -111,3 +111,5 @@ npx tsx scripts/verify-api.ts
 ## Обновлённые зависимости
 
 Next.js обновлён в пределах 16-й версии. SheetJS установлен с официального CDN, поскольку npm-версия устарела: [официальная инструкция](https://docs.sheetjs.com/docs/getting-started/installation/nodejs/). Docker использует [Next.js standalone output](https://nextjs.org/docs/app/api-reference/config/next-config-js/output).
+
+В разделе «Преподаватели» администратор и оба диспетчера могут удалять неиспользуемые записи общего справочника. Если имя ещё указано в расписании или заменах любой площадки, API возвращает 409: сначала нужно изменить назначения. Удаление записывается в журнал, доступный только главному администратору. Проверка: `npx tsx scripts/verify-teacher-deletion.ts` (только локальная база).

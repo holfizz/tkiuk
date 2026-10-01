@@ -25,6 +25,7 @@ const entities: Record<string, string> = {
 	replacement: 'Замены',
 	'week-settings': 'Тип недели',
 	user: 'Пользователь',
+	teacher: 'Преподаватель',
 }
 export default function AuditLog() {
 	const [logs, setLogs] = useState<Log[]>([])

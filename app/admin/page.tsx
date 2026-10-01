@@ -45,6 +45,8 @@ export default function AdminUpload() {
 	const [editedSchedule, setEditedSchedule] = useState<ScheduleItem[]>([])
 	const [isAuthenticated, setIsAuthenticated] = useState(false)
 	const [teachers, setTeachers] = useState<string[]>([])
+	const [deletingTeacher, setDeletingTeacher] = useState<string | null>(null)
+	const [teacherMessage, setTeacherMessage] = useState('')
 	const [replacements, setReplacements] = useState<any[]>([])
 	const [replacementMessage, setReplacementMessage] = useState('')
 	const [isEditingReplacements, setIsEditingReplacements] = useState(false)
@@ -113,6 +115,23 @@ export default function AdminUpload() {
 		const data = await res.json()
 		setTeachers(data.teachers || [])
 		setLoading(false)
+	}
+
+	const handleDeleteTeacher = async (name: string) => {
+		if (deletingTeacher || !confirm(`Удалить преподавателя «${name}» из списка?`)) return
+		setDeletingTeacher(name)
+		setTeacherMessage('')
+		try {
+			const res = await fetch(`/api/teachers?name=${encodeURIComponent(name)}`, { method: 'DELETE' })
+			const data = await res.json()
+			if (!res.ok) throw new Error(data.error || 'Не удалось удалить преподавателя')
+			setTeachers((current) => current.filter((teacher) => teacher !== name))
+			setTeacherMessage(`Преподаватель «${name}» удалён`)
+		} catch (error) {
+			setTeacherMessage(error instanceof Error ? error.message : 'Не удалось удалить преподавателя')
+		} finally {
+			setDeletingTeacher(null)
+		}
 	}
 
 	const loadReplacements = async () => {
@@ -551,12 +570,14 @@ export default function AdminUpload() {
 								: 'Все площадки'}
 					</p>
 					<div className="admin-tabs">
-						<button
-							className={`admin-tab ${activeTab === 'audit' ? 'active' : ''}`}
-							onClick={() => setActiveTab('audit')}
-						>
-							Журнал действий
-						</button>
+						{user?.campus === null && (
+							<button
+								className={`admin-tab ${activeTab === 'audit' ? 'active' : ''}`}
+								onClick={() => setActiveTab('audit')}
+							>
+								Журнал действий
+							</button>
+						)}
 						<button
 							className={`admin-tab ${activeTab === 'view' ? 'active' : ''}`}
 							onClick={() => setActiveTab('view')}
@@ -583,7 +604,7 @@ export default function AdminUpload() {
 						</button>
 					</div>
 
-					{activeTab === 'audit' && <AuditLog />}
+					{user?.campus === null && activeTab === 'audit' && <AuditLog />}
 
 					{activeTab === 'upload' && (
 						<div className="selection-container">
@@ -926,6 +947,8 @@ export default function AdminUpload() {
 									)}
 								</div>
 							</div>
+
+							{teacherMessage && <p role="status">{teacherMessage}</p>}
 
 							{loading ? (
 								<div className="loading">Загрузка...</div>
@@ -1339,7 +1362,8 @@ export default function AdminUpload() {
 									marginBottom: '24px',
 								}}
 							>
-								Всего преподавателей: {teachers.length}
+								Всего преподавателей: {teachers.length}. Удалить можно преподавателя,
+								который больше не указан в расписании и заменах обеих площадок.
 							</p>
 
 							{loading ? (
@@ -1358,7 +1382,17 @@ export default function AdminUpload() {
 								<div className="teacher-grid">
 									{teachers.map((teacher) => (
 										<div key={teacher} className="teacher-card-admin">
-											{teacher}
+											<span>{teacher}</span>
+											<button
+												type="button"
+												className="btn btn-danger btn-small"
+												style={{ marginLeft: '12px' }}
+												disabled={deletingTeacher !== null}
+												aria-label={`Удалить преподавателя ${teacher}`}
+												onClick={() => handleDeleteTeacher(teacher)}
+											>
+												{deletingTeacher === teacher ? 'Удаление…' : 'Удалить'}
+											</button>
 										</div>
 									))}
 								</div>

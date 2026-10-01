@@ -210,7 +210,8 @@ async function main() {
 				403,
 			)
 			const logs = await call('/api/audit', 'GET', undefined, cookie)
-			assert.ok(logs.body.logs.every((l: any) => l.campus === own.campus))
+			assert.equal(logs.status, 403)
+			assert.equal(logs.body.logs, undefined)
 			const form = new FormData()
 			form.append('campus', other.campus)
 			form.append('course', '1')
@@ -228,6 +229,9 @@ async function main() {
 		console.log(
 			'PASS: both dispatchers edit only their campus; forged campus cannot bypass ID checks; cancellations work',
 		)
+		const adminLogs = await call('/api/audit', 'GET', undefined, sessions.admin)
+		assert.equal(adminLogs.status, 200)
+		assert.ok(Array.isArray(adminLogs.body.logs))
 		for (const id of ids) {
 			const row = await db.schedule.findUniqueOrThrow({ where: { id } })
 			assert.equal(
