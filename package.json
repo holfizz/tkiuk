@@ -11,6 +11,7 @@
     "test": "tsx --test tests/*.test.ts",
     "db:migrate": "prisma migrate deploy",
     "accounts:setup": "tsx scripts/setup-accounts.ts",
+    "accounts:setup:production": "tsx scripts/setup-accounts.ts --production --apply",
     "schedules:import": "tsx scripts/import-schedules.ts"
   },
   "dependencies": {

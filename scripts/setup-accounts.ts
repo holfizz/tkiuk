@@ -1,15 +1,20 @@
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { randomBytes, randomInt } from 'node:crypto'
-import { PrismaClient, Campus } from '@prisma/client'
+import type { Campus } from '@prisma/client'
 import { hashPassword } from '../lib/passwords'
-import { requireLocalDatabase } from './local-env'
 
 async function main() {
 	const production = process.argv.includes('--production')
 	if (production) {
-		const url = new URL(process.env.DATABASE_URL || '')
+		// Check before importing Prisma: Prisma loads .env on import, but production
+		// must receive its connection string explicitly from the environment.
+		if (!process.env.DATABASE_URL) {
+			throw new Error('Для production передайте DATABASE_URL через переменную окружения, а не через .env.')
+		}
+		const url = new URL(process.env.DATABASE_URL)
 		if (
 			!process.argv.includes('--apply') ||
+			!['postgres:', 'postgresql:'].includes(url.protocol) ||
 			url.hostname !== 'db.prisma.io' ||
 			url.pathname !== '/postgres' ||
 			url.searchParams.get('sslmode') !== 'require'
@@ -19,8 +24,10 @@ async function main() {
 			)
 		}
 	} else {
+		const { requireLocalDatabase } = await import('./local-env')
 		requireLocalDatabase()
 	}
+	const { PrismaClient } = await import('@prisma/client')
 	const db = new PrismaClient()
 	const accounts: { username: string; name: string; campus: Campus | null }[] =
 		[
